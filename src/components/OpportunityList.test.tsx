@@ -1,7 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { OpportunityList } from "./OpportunityList";
-import type { RankedOpportunity } from "@/lib/opportunities";
+import { OpportunitiesHeading, OpportunityList } from "./OpportunityList";
+import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
 
 const item = (n: number): RankedOpportunity => ({
   name: `Opportunity ${n}`,
@@ -37,5 +37,38 @@ describe("OpportunityList", () => {
       expect(document.querySelector("details")).toBeNull();
       unmount();
     }
+  });
+
+  it("shows scores as plain text, with no tooltip button on each card", () => {
+    render(<OpportunityList items={[1, 2].map(item)} />);
+    expect(screen.getByText("99/100")).toBeInTheDocument();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+});
+
+describe("OpportunitiesHeading", () => {
+  it("has a labelled, focusable info icon next to the heading", () => {
+    render(<OpportunitiesHeading />);
+    expect(screen.getByRole("heading", { name: "Best fits for you" })).toBeInTheDocument();
+    const icon = screen.getByLabelText("What the score means");
+    expect(icon.tagName).toBe("BUTTON");
+    icon.focus();
+    expect(icon).toHaveFocus();
+  });
+
+  it("keeps the fuller description closed until the trigger is clicked", () => {
+    render(<OpportunitiesHeading />);
+    const trigger = screen.getByText("How is this scored?");
+    expect(trigger.tagName).toBe("BUTTON");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    const closed = screen.queryByTestId("scoring-explainer");
+    expect(closed?.textContent ?? "").toBe("");
+    expect(closed).not.toHaveTextContent("up to");
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    const text = screen.getByTestId("scoring-explainer").textContent ?? "";
+    for (const f of SCORING_EXPLAINER.factors) expect(text).toContain(`up to ${f.points}`);
+    expect(text).toContain(SCORING_EXPLAINER.reductions.text);
+    expect(text).not.toMatch(/gemini|openai|resume|\bAI\b/i);
   });
 });

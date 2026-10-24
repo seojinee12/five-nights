@@ -1,4 +1,65 @@
-import type { RankedOpportunity } from "@/lib/opportunities";
+import { Info } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
+
+const TIP_CLASS = "max-w-xs border bg-popover text-popover-foreground shadow-md";
+const FOCUS_CLASS =
+  "rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** The "Best fits for you" heading, an info icon with the short scoring tip, and the fuller description. */
+export function OpportunitiesHeading() {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Collapsible>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex items-center gap-1.5">
+            <h2 className="font-semibold">Best fits for you</h2>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="What the score means"
+                  className={`-m-1 inline-flex p-1 text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
+                >
+                  <Info className="size-3.5" aria-hidden="true" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className={TIP_CLASS}>{SCORING_EXPLAINER.short}</TooltipContent>
+            </Tooltip>
+          </div>
+          <CollapsibleTrigger
+            className={`text-xs text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
+          >
+            How is this scored?
+          </CollapsibleTrigger>
+        </div>
+        <CollapsibleContent
+          data-testid="scoring-explainer"
+          className="mt-2 space-y-1.5 border-l pl-3 text-xs text-muted-foreground"
+        >
+          <p>{SCORING_EXPLAINER.intro}</p>
+          <ul className="space-y-1">
+            {SCORING_EXPLAINER.factors.map((f) => (
+              <li key={f.label}>
+                <span className="font-medium text-foreground">
+                  {f.label} (up to {f.points}):
+                </span>{" "}
+                {f.text}
+              </li>
+            ))}
+            <li>
+              <span className="font-medium text-foreground">
+                {SCORING_EXPLAINER.reductions.label}:
+              </span>{" "}
+              {SCORING_EXPLAINER.reductions.text}
+            </li>
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
+    </TooltipProvider>
+  );
+}
 
 function OpportunityCard({ item }: { item: RankedOpportunity }) {
   return (

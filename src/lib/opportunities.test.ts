@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PROJECTS, RESEARCH } from "./launchpad";
 import {
+  SCORING_EXPLAINER,
   inferTags,
   inferType,
   parseYear,
@@ -373,5 +374,33 @@ describe("resume privacy", () => {
       score(without, "Engineers for Exploration"),
     );
     for (const r of withResume) expect(r.why).not.toMatch(/resume/i);
+  });
+});
+
+describe("SCORING_EXPLAINER", () => {
+  const { intro, factors, reductions, short } = SCORING_EXPLAINER;
+  const full = [
+    intro,
+    ...factors.map((f) => `${f.label} (up to ${f.points}): ${f.text}`),
+    `${reductions.label}: ${reductions.text}`,
+  ].join(" ");
+
+  it("mentions every weight in the full copy, and the weights add up to 100", () => {
+    const points = factors.map((f) => f.points);
+    expect(points).toEqual([40, 20, 15, 15, 10]);
+    expect(points.reduce((a, b) => a + b, 0)).toBe(100);
+    for (const n of points) expect(full).toContain(`up to ${n}`);
+  });
+
+  it("keeps the short copy to one plain sentence that names the main criteria, without numbers", () => {
+    expect(short.replace("Out of 100", "")).not.toMatch(/\d|·|\[/);
+    for (const word of ["interests", "goals", "year", "major"]) {
+      expect(short).toContain(word);
+    }
+    expect(short.match(/\./g)).toHaveLength(1);
+  });
+
+  it("never mentions a provider, the resume, or AI", () => {
+    expect(`${short} ${full}`).not.toMatch(/gemini|openai|resume|\bAI\b/i);
   });
 });
