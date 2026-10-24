@@ -53,6 +53,39 @@ export interface Task {
   subtasks?: CheckItem[];
 }
 
+/** A short-term aim or a longer-term goal on the student's own profile. */
+export interface StudentGoal extends CourseGoal {
+  category: Category;
+}
+
+export type OpportunityType = "research" | "internship" | "project-team";
+
+/** What the student wants from opportunities; the Opportunities tab can rank against it. */
+export interface StudentPreferences {
+  workStyle: string;
+  opportunityTypes: OpportunityType[];
+  location: string;
+  protectedTime: string;
+}
+
+export interface ResumeEntry {
+  title: string;
+  org?: string;
+  dates?: string;
+  bullets: string[];
+}
+
+/** Plain resume values. Demo resumes must use placeholders, never real contact details. */
+export interface Resume {
+  name: string;
+  contact: string;
+  education: ResumeEntry[];
+  coursework: string[];
+  projects: ResumeEntry[];
+  activities: ResumeEntry[];
+  skills: string[];
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -69,6 +102,14 @@ export interface Student {
   tasks: Task[];
   weeklyTargets: { label: string; hours: number; done: number }[];
   longTerm: Reminder[];
+  /** Optional profile fields. Students without them keep working. */
+  demoLabel?: string; // set on invented example students
+  interests?: string[];
+  skills?: string[];
+  freeHoursPerWeek?: number;
+  preferences?: StudentPreferences;
+  goals?: StudentGoal[]; // short and long horizon; monthly and yearly reminders stay in longTerm
+  resume?: Resume;
 }
 
 const ece = [
