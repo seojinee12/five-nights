@@ -9,6 +9,7 @@ import {
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
+import { chipsOrDefault, defaultChips, routeMessage } from "@/lib/mentorChips";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunityList } from "@/components/OpportunityList";
@@ -493,7 +494,7 @@ function GoalColumn({ title, items, onEdit, onAdd }: { title: string; items: Rem
   );
 }
 
-type Msg = { me: boolean; text: string; undoId?: number | undefined };
+type Msg = { me: boolean; text: string; undoId?: number | undefined; choices?: string[] };
 
 function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Student; note: { id: number; text: string; patch: Patch | null } | null; onApply: (patch: Patch) => void; onApplyNow: (patch: Patch) => number; onUndo: (id: number) => boolean; onFile: (file: File) => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -504,48 +505,72 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
   const eventsRef = useRef(s.events);
   eventsRef.current = s.events;
   const fileRef = useRef<HTMLInputElement>(null);
-  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.` }]), [s.id]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.`, choices: defaultChips() }]), [s.id]);
   useEffect(() => {
     if (!note || seenNote.current === note.id) return;
     seenNote.current = note.id;
-    setMsgs((current) => [...current, { me: false, text: note.text }]);
+    setMsgs((current) => [...current, { me: false, text: note.text, choices: defaultChips(note.patch !== null) }]);
     setPending(note.patch);
   }, [note]);
-  const send = () => {
-    const raw = text.trim();
-    if (!raw) return;
-    setText("");
-    setMsgs((current) => [...current, { me: true, text: raw }]);
-    if (pending && /^(yes|yep|apply|do it|add them|add it)\b/i.test(raw)) {
-      onApply(pending);
-      setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change." }]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView?.({ block: "end" });
+  }, [msgs]);
+  // Typed text and chip clicks both come through here, so a chip says exactly what its label says.
+  const send = (raw: string, fromChip = false) => {
+    const { message, route } = routeMessage(raw, s, pending !== null, fromChip);
+    if (route.kind === "ignore") return;
+    if (route.kind === "focus") {
+      inputRef.current?.focus();
       return;
     }
-    if (pending && /^(no|nope|leave it)\b/i.test(raw)) {
+    if (!fromChip) setText("");
+    setMsgs((current) => [...current, { me: true, text: message }]);
+    if (route.kind === "apply" && pending) {
+      onApply(pending);
       setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Left the week as it is." }]);
+      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change.", choices: defaultChips() }]);
+      return;
+    }
+    if (route.kind === "decline") {
+      setPending(null);
+      setMsgs((current) => [...current, { me: false, text: "Left the week as it is.", choices: defaultChips() }]);
+      return;
+    }
+    if (route.kind === "local") {
+      // Ahead, behind and postpone are the student's own one-step changes: applied now, with Undo.
+      const undoId = route.patch ? onApplyNow(route.patch) : undefined;
+      setPending(null);
+      setMsgs((current) => [
+        ...current,
+        ...(route.note ? [{ me: false, text: route.note, undoId }] : []),
+        { me: false, text: route.reply, choices: route.choices },
+      ]);
       return;
     }
     const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
-    void mentorChat({ data: { model: "Grok", message: raw, student: snapshot } }).then((turn) => {
+    void mentorChat({ data: { model: "Grok", message, student: snapshot } }).then((turn) => {
       if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);
         setPending(null);
-        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId }]);
+        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId, choices: chipsOrDefault(turn.choices) }]);
         return;
       }
       setPending(turn.patch);
-      setMsgs((current) => [...current, { me: false, text: turn.reply }]);
-    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed." }]));
+      setMsgs((current) => [...current, { me: false, text: turn.reply, choices: chipsOrDefault(turn.choices, turn.patch !== null) }]);
+    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: defaultChips() }]));
   };
   const undo = (index: number, id: number) => {
     const ok = onUndo(id);
     setMsgs((current) => [
       ...current.map((m, i) => (i === index ? { ...m, undoId: undefined } : m)),
-      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone." },
+      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone.", choices: defaultChips() },
     ]);
   };
+  // Only the latest assistant turn offers chips; any later message (even a typed one) retires them.
+  const latest = msgs[msgs.length - 1];
+  const quick = latest && !latest.me ? (latest.choices ?? []) : [];
   return (
     <aside className="flex h-[calc(100vh-110px)] flex-col rounded-xl border bg-card lg:sticky lg:top-5">
       <div className="flex items-center gap-2 border-b p-3">
@@ -561,13 +586,28 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
             )}
           </div>
         ))}
+        {quick.length > 0 && (
+          <div role="group" aria-label="Quick replies" className="flex flex-wrap gap-1.5">
+            {quick.map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => send(label, true)}
+                className="rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div ref={endRef} />
       </div>
       <div className="flex gap-2 border-t p-3">
         <input ref={fileRef} hidden type="file" accept=".pdf,.txt,.md,application/pdf,text/plain" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
         <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md border px-2 text-muted-foreground hover:bg-muted" aria-label="Upload a file"><Paperclip className="h-4 w-4" /></button>
-        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
+        <input ref={inputRef} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send(text)}
           placeholder="I have a midterm Thursday…" className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-        <button onClick={send} className="rounded-md bg-accent px-3 text-accent-foreground"><Send className="h-4 w-4" /></button>
+        <button onClick={() => send(text)} className="rounded-md bg-accent px-3 text-accent-foreground"><Send className="h-4 w-4" /></button>
       </div>
     </aside>
   );
