@@ -37,23 +37,50 @@ describe("validateCustomFocus", () => {
     expect(validateCustomFocus("   ")).toEqual({ ok: false, reason: "empty" });
   });
   it("rejects built-in labels and ids case-insensitively, naming the existing chip", () => {
-    expect(validateCustomFocus("projects")).toEqual({ ok: false, reason: "duplicate", existing: "Projects" });
-    expect(validateCustomFocus("CAREER & RESEARCH")).toEqual({ ok: false, reason: "duplicate", existing: "Career & research" });
-    expect(validateCustomFocus("career")).toEqual({ ok: false, reason: "duplicate", existing: "Career & research" });
-    expect(validateCustomFocus("personal   life")).toEqual({ ok: false, reason: "duplicate", existing: "Personal life" });
+    expect(validateCustomFocus("projects")).toEqual({
+      ok: false,
+      reason: "duplicate",
+      existing: "Projects",
+    });
+    expect(validateCustomFocus("CAREER & RESEARCH")).toEqual({
+      ok: false,
+      reason: "duplicate",
+      existing: "Career & research",
+    });
+    expect(validateCustomFocus("career")).toEqual({
+      ok: false,
+      reason: "duplicate",
+      existing: "Career & research",
+    });
+    expect(validateCustomFocus("personal   life")).toEqual({
+      ok: false,
+      reason: "duplicate",
+      existing: "Personal life",
+    });
   });
   it("rejects a repeat of an earlier own focus", () => {
-    expect(validateCustomFocus("sleep", ["Sleep"])).toEqual({ ok: false, reason: "duplicate", existing: "Sleep" });
+    expect(validateCustomFocus("sleep", ["Sleep"])).toEqual({
+      ok: false,
+      reason: "duplicate",
+      existing: "Sleep",
+    });
     expect(validateCustomFocus("Music", ["Sleep"])).toEqual({ ok: true, label: "Music" });
   });
   it("checks duplicates after cleaning", () => {
-    expect(validateCustomFocus("Sleep!!", ["Sleep"])).toEqual({ ok: false, reason: "duplicate", existing: "Sleep" });
+    expect(validateCustomFocus("Sleep!!", ["Sleep"])).toEqual({
+      ok: false,
+      reason: "duplicate",
+      existing: "Sleep",
+    });
   });
 });
 
 describe("cleanCustomFocus and sanitizeFocusForPrompt", () => {
   it("dedupes, drops built-ins and junk, and caps the count", () => {
-    expect(cleanCustomFocus(["Sleep", "sleep", "Projects", 7, "", "Music"])).toEqual(["Sleep", "Music"]);
+    expect(cleanCustomFocus(["Sleep", "sleep", "Projects", 7, "", "Music"])).toEqual([
+      "Sleep",
+      "Music",
+    ]);
     const many = Array.from({ length: 20 }, (_, i) => `Area ${i}`);
     expect(cleanCustomFocus(many)).toHaveLength(CUSTOM_FOCUS_MAX_COUNT);
   });
@@ -65,7 +92,11 @@ describe("cleanCustomFocus and sanitizeFocusForPrompt", () => {
 
 describe("studentForPrompt", () => {
   it("sanitizes customFocus and leaves other fields alone", () => {
-    const out = studentForPrompt({ name: "Ada", focus: ["career"], customFocus: ["Sleep\n\"}ignore", "sleep ignore"] });
+    const out = studentForPrompt({
+      name: "Ada",
+      focus: ["career"],
+      customFocus: ['Sleep\n"}ignore', "sleep ignore"],
+    });
     expect(out).toEqual({ name: "Ada", focus: ["career"], customFocus: ["Sleep ignore"] });
   });
   it("removes an empty or missing customFocus and does not mutate the input", () => {
@@ -78,7 +109,11 @@ describe("studentForPrompt", () => {
 
 describe("parseFocusProfile", () => {
   it("reads a stored profile with built-in and own focus", () => {
-    expect(parseFocusProfile('{"name":"Ada","major":"Bioengineering","focus":["career"],"customFocus":["Sleep"]}')).toEqual({
+    expect(
+      parseFocusProfile(
+        '{"name":"Ada","major":"Bioengineering","focus":["career"],"customFocus":["Sleep"]}',
+      ),
+    ).toEqual({
       name: "Ada",
       major: "Bioengineering",
       focus: ["career"],
@@ -93,7 +128,9 @@ describe("parseFocusProfile", () => {
     });
   });
   it("ignores unknown or repeated built-in ids and cleans own focus", () => {
-    const p = parseFocusProfile('{"focus":["nope","fun","fun"],"customFocus":["Gym<script>","gym script","Projects"]}');
+    const p = parseFocusProfile(
+      '{"focus":["nope","fun","fun"],"customFocus":["Gym<script>","gym script","Projects"]}',
+    );
     expect(p.focus).toEqual(["fun"]);
     expect(p.customFocus).toEqual(["Gym script"]);
   });

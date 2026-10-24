@@ -35,12 +35,16 @@ export type CustomFocusResult =
  * Checks a typed focus. Duplicates are compared case-insensitively against the built-in labels and
  * ids and the student's other own focus areas; a duplicate reports the existing label so the caller can select it.
  */
-export function validateCustomFocus(input: string, customLabels: readonly string[] = []): CustomFocusResult {
+export function validateCustomFocus(
+  input: string,
+  customLabels: readonly string[] = [],
+): CustomFocusResult {
   const label = cleanFocusLabel(input);
   if (!label) return { ok: false, reason: "empty" };
   const wanted = key(label);
   for (const option of FOCUS_OPTIONS) {
-    if (key(option.label) === wanted || option.id === wanted) return { ok: false, reason: "duplicate", existing: option.label };
+    if (key(option.label) === wanted || option.id === wanted)
+      return { ok: false, reason: "duplicate", existing: option.label };
   }
   const same = customLabels.find((existing) => key(existing) === wanted);
   if (same !== undefined) return { ok: false, reason: "duplicate", existing: same };
@@ -86,12 +90,18 @@ export function parseFocusProfile(raw: string | null): StoredFocusProfile {
   } catch {
     value = null;
   }
-  const record = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const record =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   const ids = FOCUS_OPTIONS.map((option) => option.id);
   const picked = (Array.isArray(record["focus"]) ? record["focus"] : []).filter(
     (f, i, all): f is Category => ids.includes(f as Category) && all.indexOf(f) === i,
   );
-  const profile: StoredFocusProfile = { focus: picked, customFocus: cleanCustomFocus(record["customFocus"]) };
+  const profile: StoredFocusProfile = {
+    focus: picked,
+    customFocus: cleanCustomFocus(record["customFocus"]),
+  };
   if (typeof record["name"] === "string") profile.name = record["name"];
   if (typeof record["major"] === "string") profile.major = record["major"];
   return profile;
