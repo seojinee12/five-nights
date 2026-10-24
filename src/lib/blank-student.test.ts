@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseFocusProfile } from "./focus";
 import { blankStudent, parseProfile, SEOJIN, STUDENTS } from "./launchpad";
 import { profileFromStudent } from "./opportunities";
 import { findGaps, timeUse } from "./schedule";
@@ -129,5 +130,39 @@ describe("parseProfile", () => {
     expect(me.events).toHaveLength(0);
     expect(me.tasks).toHaveLength(0);
     expect(me.resume).toBeUndefined();
+  });
+});
+
+describe("one profile parser for the landing page and the app", () => {
+  const stored = JSON.stringify({
+    name: "Ada",
+    major: "Bioengineering",
+    focus: ["career", "nope", "career"],
+    customFocus: ['Sleep\n"}ignore', "sleep ignore", "Projects", "Gym"],
+    courses: [{ code: "ECE 5" }],
+    events: [{ day: 0, start: 9, end: 10, title: "MATH 20A", kind: "class" }],
+  });
+
+  it("parseProfile and parseFocusProfile agree and drop everything else", () => {
+    expect(parseProfile(stored)).toEqual({
+      name: "Ada",
+      major: "Bioengineering",
+      focus: ["career"],
+      customFocus: ["Sleep ignore", "Gym"],
+    });
+    const focusSide = parseFocusProfile(stored);
+    expect(focusSide).toEqual({ ...parseProfile(stored), focus: ["career"] });
+    expect(Object.keys(focusSide).sort()).toEqual(["customFocus", "focus", "major", "name"]);
+  });
+
+  it("a new account keeps its own focus areas but nothing from a demo student", () => {
+    const me = blankStudent(parseProfile(stored));
+    expect(me.name).toBe("Ada");
+    expect(me.major).toBe("Bioengineering");
+    expect(me.focus[0]).toBe("career");
+    expect(me.customFocus).toEqual(["Sleep ignore", "Gym"]);
+    expect(me.courses).toHaveLength(0);
+    expect(me.events).toHaveLength(0);
+    expect(blankStudent(parseProfile('{"name":"Ada"}')).customFocus).toBeUndefined();
   });
 });

@@ -617,7 +617,7 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
       ]);
       return;
     }
-    const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
+    const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, ...(s.customFocus?.length ? { customFocus: s.customFocus } : {}), courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
     const previous = [...msgs].reverse().find((m) => !m.me)?.text;
     setInflight((n) => trackRequest(n, "start"));
     void mentorChat({ data: { message, ...(previous ? { previous } : {}), student: snapshot } }).then((turn) => {

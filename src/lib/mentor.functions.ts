@@ -14,6 +14,7 @@ type ChatBody = {
     status: "on-track" | "behind" | "ahead";
     statusNote: string;
     focus: ("academic" | "career" | "project" | "fun")[];
+    customFocus?: string[];
     courses: { code: string; name: string; units: number; grade?: string }[];
     events: { day: number; start: number; end: number; title: string; kind: "class" | "task" | "life" }[];
     tasks: { id: string; title: string; category: string; due?: string; hours?: number; priority?: string; timed: boolean }[];

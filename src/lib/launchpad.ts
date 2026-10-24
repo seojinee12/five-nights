@@ -1,4 +1,5 @@
 /** LaunchPad domain model, demo students, and schedule math. */
+import { cleanCustomFocus, parseFocusProfile } from "./focus";
 
 export type Category = "academic" | "career" | "project" | "fun";
 export type Status = "on-track" | "behind" | "ahead";
@@ -99,6 +100,8 @@ export interface Student {
   status: Status;
   statusNote: string;
   focus: Category[]; // priority order
+  /** Extra areas the student typed on the landing page; always sanitized before a model prompt. */
+  customFocus?: string[];
   courses: Course[];
   events: CalEvent[];
   tasks: Task[];
@@ -389,6 +392,7 @@ export interface BlankStudentInput {
   name?: unknown;
   major?: unknown;
   focus?: unknown;
+  customFocus?: unknown;
 }
 
 /**
@@ -402,6 +406,7 @@ export function blankStudent(input: BlankStudentInput = {}): Student {
   const picked = (Array.isArray(input.focus) ? input.focus : []).filter(
     (f, i, all): f is Category => CATEGORIES.includes(f as Category) && all.indexOf(f) === i,
   );
+  const ownFocus = cleanCustomFocus(input.customFocus);
   return {
     id: "me",
     name: text(input.name, "Engineer"),
@@ -413,6 +418,7 @@ export function blankStudent(input: BlankStudentInput = {}): Student {
     status: "on-track",
     statusNote: "Fresh start.",
     focus: [...picked, ...CATEGORIES.filter((c) => !picked.includes(c))],
+    ...(ownFocus.length ? { customFocus: ownFocus } : {}),
     courses: [],
     events: [],
     tasks: [],
@@ -425,17 +431,16 @@ export function blankStudent(input: BlankStudentInput = {}): Student {
 }
 
 /**
- * Reads the landing-page profile from localStorage text. Only the three answers the form asks for
- * (name, major, focus) are kept, so anything else stored under that key is never picked up.
- * Bad or missing text gives an empty profile.
+ * Reads the landing-page profile from localStorage text. Only the form's answers (name, major,
+ * focus, customFocus) are kept, sanitized by `parseFocusProfile`, so anything else stored under that
+ * key is never picked up. Empty answers are omitted; bad or missing text gives an empty profile.
  */
 export function parseProfile(raw: string | null): BlankStudentInput {
-  try {
-    const value: unknown = JSON.parse(raw || "{}");
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    const { name, major, focus } = value as BlankStudentInput;
-    return { name, major, focus };
-  } catch {
-    return {};
-  }
+  const p = parseFocusProfile(raw);
+  const out: BlankStudentInput = {};
+  if (p.name !== undefined) out.name = p.name;
+  if (p.major !== undefined) out.major = p.major;
+  if (p.focus.length) out.focus = p.focus;
+  if (p.customFocus.length) out.customFocus = p.customFocus;
+  return out;
 }
