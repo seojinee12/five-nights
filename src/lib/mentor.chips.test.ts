@@ -52,7 +52,11 @@ describe("chatWithMentor choices (network mocked)", () => {
     delete process.env["XAI_API_KEY"];
   });
 
-  it("gives the default chips when there is no key, without calling the network", async () => {
+  // Choice rule: a plain free-text reply with no choices shows no chips. The starters stay on
+  // terminal-like turns (greeting, applied, undone, declined, file notes) and on error turns, which
+  // end without the model; the starters are local flows that still work then. Yes/no stays while
+  // a big change waits.
+  it("keeps the starter chips when there is no key (terminal-like), without calling the network", async () => {
     for (const model of ["Gemini", "Grok"] as const) {
       const { chatWithMentor } = await load({});
       const turn = await chatWithMentor({ model, message: "hi", student });
@@ -62,7 +66,7 @@ describe("chatWithMentor choices (network mocked)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("gives the default chips when the call fails", async () => {
+  it("keeps the starter chips when the call fails (terminal-like error)", async () => {
     const { chatWithMentor } = await load({ gemini: "test-key" });
     fetchMock.mockResolvedValue(new Response("{}", { status: 500 }));
     const turn = await chatWithMentor({ model: "Gemini", message: "hi", student });
@@ -98,18 +102,21 @@ describe("chatWithMentor choices (network mocked)", () => {
     expect(JSON.stringify(body.contents)).toContain("choices");
   });
 
-  it("falls back to the starters when the model returns none, and to yes/no while a change waits", async () => {
+  it("shows no chips when the model returns none, and yes/no while a change waits", async () => {
     const { chatWithMentor } = await load({ gemini: "test-key" });
     fetchMock.mockResolvedValueOnce(json(candidate({ reply: "Okay.", patch: null })));
-    expect((await chatWithMentor({ model: "Gemini", message: "hi", student })).choices).toEqual(
-      defaultChips(),
+    expect((await chatWithMentor({ model: "Gemini", message: "hi", student })).choices).toEqual([]);
+    fetchMock.mockResolvedValueOnce(
+      json(candidate({ reply: "Okay.", patch: null, choices: [null, " "] })),
     );
+    expect((await chatWithMentor({ model: "Gemini", message: "hi", student })).choices).toEqual([]);
+    // A small change is applied right away; the client adds the starters after "Added …" itself.
     fetchMock.mockResolvedValueOnce(
       json(candidate({ reply: "Done.", patch: { addTasks: [task] }, choices: [] })),
     );
     const small = await chatWithMentor({ model: "Gemini", message: "add", student });
     expect(small.size).toBe("small");
-    expect(small.choices).toEqual(defaultChips());
+    expect(small.choices).toEqual([]);
     fetchMock.mockResolvedValueOnce(
       json(
         candidate({
@@ -121,6 +128,12 @@ describe("chatWithMentor choices (network mocked)", () => {
     const big = await chatWithMentor({ model: "Gemini", message: "add two", student });
     expect(big.size).toBe("big");
     expect(big.choices).toEqual(defaultChips(true));
+  });
+
+  it("shows no chips for a plain xAI reply without choices", async () => {
+    const { chatWithMentor } = await load({ xai: "test-key" });
+    fetchMock.mockResolvedValueOnce(json(grokReply({ reply: "Sure.", patch: null })));
+    expect((await chatWithMentor({ model: "Grok", message: "hi", student })).choices).toEqual([]);
   });
 
   it("returns choices from the xAI path too", async () => {

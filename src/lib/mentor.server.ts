@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { calendarPrompt, eventsFromModel, parseIsoDate, type CalendarRequest } from "./calendar-gemini";
 import type { CalEvent } from "./launchpad";
-import { chipsOrDefault, defaultChips } from "./mentorChips";
+import { defaultChips, replyChips } from "./mentorChips";
 import { sanitizePatch, type Patch } from "./patch";
 import { classifyPatch, type PatchSize } from "./patchSize";
 
@@ -207,8 +207,8 @@ function turnOf(
 ): Turn {
   const patch = sanitizePatch(rawPatch);
   const size = patch && allowSmall ? classifyPatch(rawPatch, events) : "big";
-  // The model's quick replies when it gave usable ones, else deterministic defaults (yes/no while a change waits).
-  const choices = chipsOrDefault(rawChoices, patch !== null && size !== "small");
+  // The model's quick replies when it gave usable ones; yes/no while a change waits; otherwise none.
+  const choices = replyChips(rawChoices, patch !== null && size !== "small" ? defaultChips(true) : []);
   return { reply: size === "small" ? reply : withAsk(reply, patch), patch, size, choices };
 }
 

@@ -8,8 +8,8 @@ import {
   REPRIORITIZE_CHIP,
   aheadChips,
   behindChips,
-  chipsOrDefault,
   defaultChips,
+  replyChips,
   resolveChip,
   routeMessage,
   sanitizeChoices,
@@ -92,11 +92,17 @@ describe("default chips", () => {
     expect(defaultChips(true)).toEqual(["Yes, apply it", "No, leave it"]);
   });
 
-  it("keeps the model's choices, and falls back to defaults when there are none", () => {
-    expect(chipsOrDefault(["Thursday", "Friday"])).toEqual(["Thursday", "Friday"]);
-    expect(chipsOrDefault(undefined)).toEqual(defaultChips());
-    expect(chipsOrDefault([null, " "])).toEqual(defaultChips());
-    expect(chipsOrDefault([], true)).toEqual(defaultChips(true));
+  it("keeps the model's choices, and shows none for a free-text reply that has none", () => {
+    expect(replyChips(["Thursday", "Friday"])).toEqual(["Thursday", "Friday"]);
+    expect(replyChips(undefined)).toEqual([]);
+    expect(replyChips([null, " "])).toEqual([]);
+    expect(replyChips([])).toEqual([]);
+  });
+
+  it("uses the fallback only when the caller says the turn needs one", () => {
+    expect(replyChips([], defaultChips(true))).toEqual(defaultChips(true));
+    expect(replyChips(undefined, defaultChips())).toEqual(defaultChips());
+    expect(replyChips(["A"], defaultChips())).toEqual(["A"]);
   });
 
   it("yes/no defaults are answered by the existing yes/no handling", () => {

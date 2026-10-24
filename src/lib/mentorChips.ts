@@ -43,15 +43,23 @@ export function clip(label: string, max = MAX_CHOICE_LENGTH): string {
   return `${label.slice(0, max - 1).trimEnd()}…`;
 }
 
-/** Chips shown when there is nothing better: the three starters, or yes/no while a change waits. */
+/**
+ * The starters, or yes/no while a change waits. These are for terminal-like turns (the greeting,
+ * "Applied.", "Undone.", a declined change, a file note, an error) and for a waiting change,
+ * never for a plain free-text reply.
+ */
 export function defaultChips(pending = false): string[] {
   return pending ? [YES_CHIP, NO_CHIP] : [AHEAD_CHIP, BEHIND_CHIP, CHANGE_CHIP];
 }
 
-/** The model's own choices when it gave usable ones, otherwise the defaults. */
-export function chipsOrDefault(raw: unknown, pending = false): string[] {
+/**
+ * The model's own choices when it gave usable ones, otherwise `fallback`, which is empty unless
+ * the turn is terminal-like or a change waits (see `defaultChips`). A free-text reply with no
+ * choices therefore shows no chips.
+ */
+export function replyChips(raw: unknown, fallback: string[] = []): string[] {
   const choices = sanitizeChoices(raw);
-  return choices.length ? choices : defaultChips(pending);
+  return choices.length ? choices : fallback;
 }
 
 const openTasks = (student: Student): Task[] =>

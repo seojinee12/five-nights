@@ -9,7 +9,7 @@ import {
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
-import { chipsOrDefault, defaultChips, routeMessage } from "@/lib/mentorChips";
+import { defaultChips, replyChips, routeMessage } from "@/lib/mentorChips";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunityList } from "@/components/OpportunityList";
@@ -556,11 +556,11 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
       if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);
         setPending(null);
-        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId, choices: chipsOrDefault(turn.choices) }]);
+        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId, choices: replyChips(turn.choices, defaultChips()) }]);
         return;
       }
       setPending(turn.patch);
-      setMsgs((current) => [...current, { me: false, text: turn.reply, choices: chipsOrDefault(turn.choices, turn.patch !== null) }]);
+      setMsgs((current) => [...current, { me: false, text: turn.reply, choices: replyChips(turn.choices, turn.patch !== null ? defaultChips(true) : []) }]);
     }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: defaultChips() }]));
   };
   const undo = (index: number, id: number) => {
