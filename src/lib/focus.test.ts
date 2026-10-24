@@ -4,6 +4,7 @@ import {
   CUSTOM_FOCUS_MAX_LENGTH,
   cleanCustomFocus,
   cleanFocusLabel,
+  commitFocusDraft,
   parseFocusProfile,
   sanitizeFocusForPrompt,
   studentForPrompt,
@@ -72,6 +73,52 @@ describe("validateCustomFocus", () => {
       reason: "duplicate",
       existing: "Sleep",
     });
+  });
+});
+
+describe("commitFocusDraft", () => {
+  const base = { focus: ["academic"], own: [{ label: "Sleep", on: false }] };
+  it("adds a new focus, selected, and leaves the input state untouched", () => {
+    const next = commitFocusDraft(base, "  Robotics ");
+    expect(next.status).toBe("added");
+    expect(next.own).toEqual([
+      { label: "Sleep", on: false },
+      { label: "Robotics", on: true },
+    ]);
+    expect(next.focus).toEqual(["academic"]);
+    expect(base.own).toHaveLength(1);
+  });
+  it("changes nothing for an empty or symbol-only draft", () => {
+    for (const draft of ["", "   ", "!!!"]) {
+      const next = commitFocusDraft(base, draft);
+      expect(next.status).toBe("empty");
+      expect(next.own).toEqual(base.own);
+      expect(next.focus).toEqual(base.focus);
+    }
+  });
+  it("selects an existing own chip instead of adding a duplicate", () => {
+    const next = commitFocusDraft(base, "sleep");
+    expect(next.status).toBe("selected");
+    expect(next.own).toEqual([{ label: "Sleep", on: true }]);
+  });
+  it("selects a built-in chip instead of adding a duplicate", () => {
+    const next = commitFocusDraft(base, "Projects");
+    expect(next.status).toBe("selected");
+    expect(next.focus).toEqual(["academic", "project"]);
+    expect(next.own).toEqual(base.own);
+    expect(commitFocusDraft(base, "academics").focus).toEqual(["academic"]);
+  });
+  it("does not add past the limit", () => {
+    const full = {
+      focus: [],
+      own: Array.from({ length: CUSTOM_FOCUS_MAX_COUNT }, (_, i) => ({
+        label: `Area ${i}`,
+        on: true,
+      })),
+    };
+    const next = commitFocusDraft(full, "One more");
+    expect(next.status).toBe("empty");
+    expect(next.own).toHaveLength(CUSTOM_FOCUS_MAX_COUNT);
   });
 });
 

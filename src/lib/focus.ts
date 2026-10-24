@@ -51,6 +51,51 @@ export function validateCustomFocus(
   return { ok: true, label };
 }
 
+export interface OwnFocus {
+  label: string;
+  on: boolean;
+}
+
+export interface FocusSelection {
+  /** Selected built-in focus ids. */
+  focus: string[];
+  /** Every own focus chip, selected or not. */
+  own: OwnFocus[];
+}
+
+/**
+ * Folds a typed draft into the selection. A new focus is added selected; a duplicate selects the
+ * chip that already exists; an empty draft changes nothing. `status` says which happened.
+ */
+export function commitFocusDraft(
+  state: FocusSelection,
+  draft: string,
+): FocusSelection & { status: "empty" | "added" | "selected" } {
+  const result = validateCustomFocus(
+    draft,
+    state.own.map((o) => o.label),
+  );
+  if (result.ok) {
+    if (state.own.length >= CUSTOM_FOCUS_MAX_COUNT) return { ...state, status: "empty" };
+    return {
+      focus: state.focus,
+      own: [...state.own, { label: result.label, on: true }],
+      status: "added",
+    };
+  }
+  if (result.reason === "empty") return { ...state, status: "empty" };
+  const builtIn = FOCUS_OPTIONS.find((f) => f.label === result.existing);
+  if (builtIn) {
+    const focus = state.focus.includes(builtIn.id) ? state.focus : [...state.focus, builtIn.id];
+    return { focus, own: state.own, status: "selected" };
+  }
+  return {
+    focus: state.focus,
+    own: state.own.map((o) => (o.label === result.existing ? { ...o, on: true } : o)),
+    status: "selected",
+  };
+}
+
 /** Cleans and dedupes a list of own focus areas, keeping order and dropping built-in names. */
 export function cleanCustomFocus(list: unknown): string[] {
   if (!Array.isArray(list)) return [];
