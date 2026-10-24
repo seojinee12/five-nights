@@ -3,3 +3,10 @@ __pycache__/
 *.py[cod]
 .venv/
 data/
+node_modules/
+dist/
+.output/
+.vinxi/
+.tanstack/
+*.log
+.DS_Store
