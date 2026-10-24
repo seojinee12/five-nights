@@ -7,6 +7,7 @@ import {
 } from "@/lib/launchpad";
 import { parseCalendar } from "@/lib/calendar";
 import { applyPatch, type Patch } from "@/lib/patch";
+import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 
 export const Route = createFileRoute("/app")({
@@ -41,6 +42,10 @@ function AppPage() {
   const base = u === "me" ? custom : STUDENTS.find((s) => s.id === u) ?? SEOJIN;
   const [student, setStudent] = useState<Student | null>(() => (base ? structuredClone(base) : null));
   const [note, setNote] = useState<{ id: number; text: string; patch: Patch | null } | null>(null);
+  const studentRef = useRef<Student | null>(null);
+  studentRef.current = student;
+  const undoLog = useRef(new Map<number, { prev: Student; next: Student }>());
+  const undoSeq = useRef(0);
   const calRef = useRef<HTMLInputElement>(null);
   const sylRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -77,6 +82,23 @@ function AppPage() {
   };
 
   const edit = (fn: (current: Student) => Student) => setStudent((current) => (current ? fn(current) : current));
+  const applyNow = (patch: Patch): number => {
+    const prev = studentRef.current;
+    if (!prev) return 0;
+    const next = applyPatch(prev, patch);
+    const id = ++undoSeq.current;
+    undoLog.current.set(id, { prev, next });
+    setStudent(next);
+    return id;
+  };
+  // Only undo if nothing else has changed since the patch was applied.
+  const undoApplied = (id: number): boolean => {
+    const entry = undoLog.current.get(id);
+    undoLog.current.delete(id);
+    if (!entry || studentRef.current !== entry.next) return false;
+    setStudent(entry.prev);
+    return true;
+  };
 
   return (
     <div className="min-h-screen">
@@ -115,7 +137,7 @@ function AppPage() {
           {tab === "Opportunities" && <Opportunities />}
           {tab === "Long-term" && <LongTerm s={student} onChange={edit} />}
         </main>
-        <Assistant s={student} note={note} onApply={(patch) => setStudent((current) => current ? applyPatch(current, patch) : current)} onFile={(file) => void onSyllabusFile(file)} />
+        <Assistant s={student} note={note} onApply={(patch) => setStudent((current) => current ? applyPatch(current, patch) : current)} onApplyNow={applyNow} onUndo={undoApplied} onFile={(file) => void onSyllabusFile(file)} />
       </div>
     </div>
   );
@@ -414,13 +436,15 @@ function GoalColumn({ title, items, onEdit, onAdd }: { title: string; items: Rem
   );
 }
 
-function Assistant({ s, note, onApply, onFile }: { s: Student; note: { id: number; text: string; patch: Patch | null } | null; onApply: (patch: Patch) => void; onFile: (file: File) => void }) {
-  const [msgs, setMsgs] = useState<{ me: boolean; text: string }[]>([]);
+type Msg = { me: boolean; text: string; undoId?: number | undefined };
+
+function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Student; note: { id: number; text: string; patch: Patch | null } | null; onApply: (patch: Patch) => void; onApplyNow: (patch: Patch) => number; onUndo: (id: number) => boolean; onFile: (file: File) => void }) {
+  const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Patch | null>(null);
   const seenNote = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
-  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll suggest changes and ask before applying them.` }]), [s.id]);
+  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.` }]), [s.id]);
   useEffect(() => {
     if (!note || seenNote.current === note.id) return;
     seenNote.current = note.id;
@@ -445,9 +469,22 @@ function Assistant({ s, note, onApply, onFile }: { s: Student; note: { id: numbe
     }
     const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
     void mentorChat({ data: { model: "Grok", message: raw, student: snapshot } }).then((turn) => {
+      if (turn.patch && turn.size === "small" && classifyPatch(turn.patch) === "small") {
+        const undoId = onApplyNow(turn.patch);
+        setPending(null);
+        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId }]);
+        return;
+      }
       setPending(turn.patch);
       setMsgs((current) => [...current, { me: false, text: turn.reply }]);
     }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed." }]));
+  };
+  const undo = (index: number, id: number) => {
+    const ok = onUndo(id);
+    setMsgs((current) => [
+      ...current.map((m, i) => (i === index ? { ...m, undoId: undefined } : m)),
+      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone." },
+    ]);
   };
   return (
     <aside className="flex h-[calc(100vh-110px)] flex-col rounded-xl border bg-card lg:sticky lg:top-5">
@@ -457,7 +494,12 @@ function Assistant({ s, note, onApply, onFile }: { s: Student; note: { id: numbe
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-3 text-sm">
         {msgs.map((m, i) => (
-          <div key={i} className={m.me ? "ml-8 rounded-lg bg-primary p-2.5 text-primary-foreground" : "mr-4"}>{m.text}</div>
+          <div key={i} className={m.me ? "ml-8 rounded-lg bg-primary p-2.5 text-primary-foreground" : "mr-4"}>
+            {m.text}
+            {m.undoId !== undefined && (
+              <button type="button" onClick={() => undo(i, m.undoId!)} className="ml-2 rounded-md border px-2 py-0.5 text-xs hover:bg-muted">Undo</button>
+            )}
+          </div>
         ))}
       </div>
       <div className="flex gap-2 border-t p-3">
