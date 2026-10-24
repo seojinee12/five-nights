@@ -396,13 +396,17 @@ export function blankStudent(input: BlankStudentInput = {}): Student {
   };
 }
 
-/** Reads the landing-page profile from localStorage text. Bad or missing text gives an empty profile. */
+/**
+ * Reads the landing-page profile from localStorage text. Only the three answers the form asks for
+ * (name, major, focus) are kept, so anything else stored under that key is never picked up.
+ * Bad or missing text gives an empty profile.
+ */
 export function parseProfile(raw: string | null): BlankStudentInput {
   try {
     const value: unknown = JSON.parse(raw || "{}");
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? (value as BlankStudentInput)
-      : {};
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const { name, major, focus } = value as BlankStudentInput;
+    return { name, major, focus };
   } catch {
     return {};
   }

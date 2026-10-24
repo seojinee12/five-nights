@@ -313,9 +313,13 @@ function WeekView({ s, gaps }: { s: Student; gaps: ReturnType<typeof findGaps> }
     <section className="rounded-xl border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs">
         <h2 className="mr-auto text-base font-semibold">This week</h2>
-        <Legend c="bg-class" l="Class" />
-        <Legend c="bg-task" l="Task" />
-        <Legend c="bg-life" l="Life" />
+        {s.events.length > 0 && (
+          <>
+            <Legend c="bg-class" l="Class" />
+            <Legend c="bg-task" l="Task" />
+            <Legend c="bg-life" l="Life" />
+          </>
+        )}
         <Legend c="hatch-free" l="Free" />
         {gaps.some((g) => g.type === "pseudo") && <Legend c="bg-pseudo" l="Pseudo-free" />}
         {gaps.some((g) => g.type === "lazy") && <Legend c="hatch-lazy" l="Unused" />}
