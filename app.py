@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from html import escape
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -33,6 +34,7 @@ from models.schemas import (
 from services.calendar_import import parse_calendar_bytes
 from services.gemini_service import GeminiService
 from services.grok_service import GrokService
+from services.opportunity_ranker import rank_opportunities, refine_reasons
 from services.planner_ai import PlannerAssistant
 from services.planner_data import (
     build_demo_planner,
@@ -701,7 +703,38 @@ def render_classes(profile: StudentProfile, demo: bool) -> None:
         persist_personal()
 
 
+TYPE_BADGE = {
+    "research": "#1D4ED8", "internship": "#9A3412", "club": "#6D28D9", "project": "#0F766E",
+    "hackathon": "#BE123C", "scholarship": "#A16207", "event": "#475569",
+}
+
+
+def render_opportunities(profile: StudentProfile) -> None:
+    planner: Optional[Planner] = st.session_state.get("planner")
+    goals = [g.title for g in (planner.short_goals + planner.long_goals)] if planner else []
+    ranked = refine_reasons(rank_opportunities(profile, goals=goals), profile, st.session_state.get("gemini_service"))
+    st.markdown("#### Best fits for you")
+    st.caption("Ranked from your year, major, skills, interests, and goals. The score is out of 100.")
+
+    def card(item) -> None:
+        opp, color = item.opportunity, TYPE_BADGE.get(item.opportunity.type, "#475569")
+        link = f' · <a href="{escape(opp.url)}" target="_blank">{escape(opp.url.split("//")[-1].rstrip("/"))}</a>' if opp.url else ""
+        st.markdown(
+            f'<div class="soft-card"><span style="background:{color};color:#fff;border-radius:999px;padding:2px 10px;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em">{escape(opp.type)}</span> '
+            f'<strong>{escape(opp.title)}</strong> · {item.score}/100<br>{escape(opp.summary)}<br>'
+            f'<em>Why: {escape(item.why)}</em>{link}</div>',
+            unsafe_allow_html=True,
+        )
+
+    for item in ranked[:6]:
+        card(item)
+    with st.expander(f"See the other {len(ranked) - 6} opportunities"):
+        for item in ranked[6:]:
+            card(item)
+
+
 def render_career(profile: StudentProfile, demo: bool) -> None:
+    render_opportunities(profile)
     if demo:
         st.markdown("#### Labs and teams")
         st.caption("Real UC San Diego pages. Academia still comes first; these are the career step.")
