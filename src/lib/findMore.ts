@@ -136,7 +136,7 @@ export function findMorePrompt(input: FindMoreInput): string {
 }
 
 export const FIND_MORE_MESSAGES = {
-  error: "Couldn't find more right now",
+  error: "Couldn't find more right now.",
   empty: "No new opportunities found this time.",
   added: (n: number) => (n === 1 ? "Added 1 new opportunity." : `Added ${n} new opportunities.`),
 } as const;

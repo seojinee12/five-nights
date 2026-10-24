@@ -155,7 +155,7 @@ describe("findMoreOutcome", () => {
     ]) {
       expect(await findMoreOutcome({ ...base, ask })).toEqual({
         status: "error",
-        message: "Couldn't find more right now",
+        message: "Couldn't find more right now.",
       });
     }
   });

@@ -11,6 +11,7 @@ import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
 import { findMoreOpportunities, mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { findMoreOutcome } from "@/lib/findMore";
+import { useTransientMessage } from "@/lib/useTransientMessage";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunitiesHeading, OpportunityList } from "@/components/OpportunityList";
 
@@ -420,7 +421,8 @@ function Opportunities({ s }: { s: Student }) {
   const [research, setResearch] = useState(RESEARCH);
   const [projects, setProjects] = useState(PROJECTS);
   const [finding, setFinding] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useTransientMessage();
+  const [expandSignal, setExpandSignal] = useState(0);
   const addedMore = useRef(false);
   useEffect(() => {
     sourceOpportunities()
@@ -477,6 +479,7 @@ function Opportunities({ s }: { s: Student }) {
       addedMore.current = true;
       setResearch(outcome.research);
       setProjects(outcome.projects);
+      setExpandSignal((n) => n + 1);
     }
     setNote(outcome.message);
     setFinding(false);
@@ -484,7 +487,7 @@ function Opportunities({ s }: { s: Student }) {
   return (
     <div className="space-y-3">
       <OpportunitiesHeading onFindMore={() => void findMore()} finding={finding} message={note} />
-      <OpportunityList items={ranked} />
+      <OpportunityList items={ranked} expandSignal={expandSignal} />
     </div>
   );
 }

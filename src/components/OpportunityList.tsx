@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Info, Search } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -42,9 +43,11 @@ export function OpportunitiesHeading({
             {onFindMore && (
               <button
                 type="button"
-                onClick={onFindMore}
-                disabled={finding}
-                className={`inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:cursor-default disabled:opacity-60 disabled:hover:text-muted-foreground ${FOCUS_CLASS}`}
+                onClick={() => {
+                  if (!finding) onFindMore();
+                }}
+                aria-disabled={finding}
+                className={`inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground aria-disabled:cursor-default aria-disabled:opacity-60 aria-disabled:hover:text-muted-foreground ${FOCUS_CLASS}`}
               >
                 <Search className="size-3" aria-hidden="true" />
                 {finding ? "Finding…" : "Find more"}
@@ -57,11 +60,9 @@ export function OpportunitiesHeading({
             </CollapsibleTrigger>
           </div>
         </div>
-        {message && (
-          <p role="status" className="mt-1 text-xs text-muted-foreground">
-            {message}
-          </p>
-        )}
+        <div role="status" aria-live="polite">
+          {message && <p className="mt-1 text-xs text-muted-foreground">{message}</p>}
+        </div>
         <CollapsibleContent
           data-testid="scoring-explainer"
           className="mt-2 space-y-1.5 border-l pl-3 text-xs text-muted-foreground"
@@ -113,11 +114,18 @@ function OpportunityCard({ item }: { item: RankedOpportunity }) {
 export function OpportunityList({
   items,
   visible = 3,
+  expandSignal = 0,
 }: {
   items: RankedOpportunity[];
   visible?: number;
+  /** Opens the "See N more" expander each time this number changes to a new value above 0. */
+  expandSignal?: number;
 }) {
   const rest = items.slice(visible);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (expandSignal > 0) setOpen(true);
+  }, [expandSignal]);
   return (
     <div className="space-y-3">
       <ul className="space-y-3">
@@ -126,7 +134,11 @@ export function OpportunityList({
         ))}
       </ul>
       {rest.length > 0 && (
-        <details className="group">
+        <details
+          className="group"
+          open={open}
+          onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+        >
           <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
             See {rest.length} more
           </summary>

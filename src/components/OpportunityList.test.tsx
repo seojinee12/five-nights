@@ -85,14 +85,17 @@ describe("OpportunitiesHeading find more", () => {
     render(<OpportunitiesHeading onFindMore={onFindMore} />);
     fireEvent.click(screen.getByRole("button", { name: "Find more" }));
     expect(onFindMore).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
-  it("is disabled and reads Finding… while loading", () => {
+  it("is aria-disabled, still focusable, and reads Finding… while loading", () => {
     const onFindMore = vi.fn();
     render(<OpportunitiesHeading onFindMore={onFindMore} finding />);
     const button = screen.getByRole("button", { name: "Finding…" });
-    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).not.toBeDisabled();
+    button.focus();
+    expect(button).toHaveFocus();
     fireEvent.click(button);
     expect(onFindMore).not.toHaveBeenCalled();
   });
@@ -101,8 +104,33 @@ describe("OpportunitiesHeading find more", () => {
     const { rerender } = render(
       <OpportunitiesHeading onFindMore={() => {}} message={FIND_MORE_MESSAGES.empty} />,
     );
-    expect(screen.getByRole("status")).toHaveTextContent("No new opportunities found this time.");
+    const live = screen.getByRole("status");
+    expect(live).toHaveAttribute("aria-live", "polite");
+    expect(live).toHaveTextContent("No new opportunities found this time.");
     rerender(<OpportunitiesHeading onFindMore={() => {}} message={FIND_MORE_MESSAGES.error} />);
-    expect(screen.getByRole("status")).toHaveTextContent("Couldn't find more right now");
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't find more right now.");
+  });
+});
+
+describe("OpportunityList expandSignal", () => {
+  const items = [1, 2, 3, 4, 5].map(item);
+  const detailsOpen = () => document.querySelector("details")!.hasAttribute("open");
+
+  it("keeps the expander closed by default and opens it when the signal changes", () => {
+    const { rerender } = render(<OpportunityList items={items} expandSignal={0} />);
+    expect(detailsOpen()).toBe(false);
+    rerender(<OpportunityList items={items} expandSignal={1} />);
+    expect(detailsOpen()).toBe(true);
+  });
+
+  it("can be closed by hand and reopens on the next signal", () => {
+    const { rerender } = render(<OpportunityList items={items} expandSignal={1} />);
+    const details = document.querySelector("details")!;
+    expect(details).toHaveAttribute("open");
+    details.removeAttribute("open");
+    fireEvent(details, new Event("toggle"));
+    expect(detailsOpen()).toBe(false);
+    rerender(<OpportunityList items={items} expandSignal={2} />);
+    expect(detailsOpen()).toBe(true);
   });
 });
