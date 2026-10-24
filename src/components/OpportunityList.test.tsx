@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { OpportunitiesHeading, OpportunityList } from "./OpportunityList";
+import { FIND_MORE_MESSAGES } from "@/lib/findMore";
 import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
 
 const item = (n: number): RankedOpportunity => ({
@@ -70,5 +71,38 @@ describe("OpportunitiesHeading", () => {
     for (const f of SCORING_EXPLAINER.factors) expect(text).toContain(`up to ${f.points}`);
     expect(text).toContain(SCORING_EXPLAINER.reductions.text);
     expect(text).not.toMatch(/gemini|openai|resume|\bAI\b/i);
+  });
+});
+
+describe("OpportunitiesHeading find more", () => {
+  it("shows no Find more button unless a handler is given", () => {
+    render(<OpportunitiesHeading />);
+    expect(screen.queryByRole("button", { name: /find more/i })).toBeNull();
+  });
+
+  it("calls the handler from a small Find more button", () => {
+    const onFindMore = vi.fn();
+    render(<OpportunitiesHeading onFindMore={onFindMore} />);
+    fireEvent.click(screen.getByRole("button", { name: "Find more" }));
+    expect(onFindMore).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("is disabled and reads Finding… while loading", () => {
+    const onFindMore = vi.fn();
+    render(<OpportunitiesHeading onFindMore={onFindMore} finding />);
+    const button = screen.getByRole("button", { name: "Finding…" });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onFindMore).not.toHaveBeenCalled();
+  });
+
+  it("shows the empty and error messages inline", () => {
+    const { rerender } = render(
+      <OpportunitiesHeading onFindMore={() => {}} message={FIND_MORE_MESSAGES.empty} />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("No new opportunities found this time.");
+    rerender(<OpportunitiesHeading onFindMore={() => {}} message={FIND_MORE_MESSAGES.error} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't find more right now");
   });
 });

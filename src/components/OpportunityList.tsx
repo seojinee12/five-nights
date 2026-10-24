@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info, Search } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
@@ -8,7 +8,17 @@ const FOCUS_CLASS =
   "rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /** The "Best fits for you" heading, an info icon with the short scoring tip, and the fuller description. */
-export function OpportunitiesHeading() {
+export function OpportunitiesHeading({
+  onFindMore,
+  finding = false,
+  message,
+}: {
+  /** When set, a small "Find more" button shows in the heading row. */
+  onFindMore?: () => void;
+  finding?: boolean;
+  /** A short result line shown under the heading row. */
+  message?: string | null;
+}) {
   return (
     <TooltipProvider delayDuration={150}>
       <Collapsible>
@@ -28,12 +38,30 @@ export function OpportunitiesHeading() {
               <TooltipContent className={TIP_CLASS}>{SCORING_EXPLAINER.short}</TooltipContent>
             </Tooltip>
           </div>
-          <CollapsibleTrigger
-            className={`text-xs text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
-          >
-            How is this scored?
-          </CollapsibleTrigger>
+          <div className="flex items-center gap-3">
+            {onFindMore && (
+              <button
+                type="button"
+                onClick={onFindMore}
+                disabled={finding}
+                className={`inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:cursor-default disabled:opacity-60 disabled:hover:text-muted-foreground ${FOCUS_CLASS}`}
+              >
+                <Search className="size-3" aria-hidden="true" />
+                {finding ? "Finding…" : "Find more"}
+              </button>
+            )}
+            <CollapsibleTrigger
+              className={`text-xs text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
+            >
+              How is this scored?
+            </CollapsibleTrigger>
+          </div>
         </div>
+        {message && (
+          <p role="status" className="mt-1 text-xs text-muted-foreground">
+            {message}
+          </p>
+        )}
         <CollapsibleContent
           data-testid="scoring-explainer"
           className="mt-2 space-y-1.5 border-l pl-3 text-xs text-muted-foreground"

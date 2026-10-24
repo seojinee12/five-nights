@@ -9,7 +9,8 @@ import {
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
-import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
+import { findMoreOpportunities, mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
+import { findMoreOutcome } from "@/lib/findMore";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunitiesHeading, OpportunityList } from "@/components/OpportunityList";
 
@@ -418,10 +419,13 @@ function CourseBlock({ course, onChange }: { course: Course; onChange: (course: 
 function Opportunities({ s }: { s: Student }) {
   const [research, setResearch] = useState(RESEARCH);
   const [projects, setProjects] = useState(PROJECTS);
+  const [finding, setFinding] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const addedMore = useRef(false);
   useEffect(() => {
     sourceOpportunities()
       .then((lists) => {
-        if (!lists) return;
+        if (!lists || addedMore.current) return;
         if (lists.research.length)
           setResearch(
             lists.research.map((item) => ({
@@ -446,9 +450,40 @@ function Opportunities({ s }: { s: Student }) {
       ),
     [research, projects, s],
   );
+  const findMore = async () => {
+    if (finding) return;
+    setFinding(true);
+    setNote(null);
+    const profile = profileFromStudent(s);
+    const outcome = await findMoreOutcome({
+      current: { research, projects },
+      shown: ranked.flatMap((item) => [item.name, item.url]),
+      profile: {
+        interests: profile.interests ?? [],
+        goals: profile.goals ?? [],
+        ...(profile.year ? { year: profile.year } : {}),
+        ...(profile.major ? { major: profile.major } : {}),
+      },
+      ask: (input) => findMoreOpportunities({ data: input }),
+      toResearch: (item) => ({
+        name: item.name,
+        pi: item.sub ?? "",
+        what: item.what,
+        url: item.url,
+      }),
+      toProject: (item) => item,
+    });
+    if (outcome.status === "added") {
+      addedMore.current = true;
+      setResearch(outcome.research);
+      setProjects(outcome.projects);
+    }
+    setNote(outcome.message);
+    setFinding(false);
+  };
   return (
     <div className="space-y-3">
-      <OpportunitiesHeading />
+      <OpportunitiesHeading onFindMore={() => void findMore()} finding={finding} message={note} />
       <OpportunityList items={ranked} />
     </div>
   );
