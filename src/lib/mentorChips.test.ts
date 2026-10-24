@@ -13,6 +13,7 @@ import {
   asksYesNo,
   defaultChips,
   fallbackChips,
+  focusAfterChipClick,
   modelTurnChips,
   replyChips,
   resolveChip,
@@ -476,5 +477,13 @@ describe("answering a waiting change with a soft yes", () => {
     expect(routeMessage("Never mind", student, true).route.kind).toBe("decline");
     expect(routeMessage("Okay but make it 2 hours", student, true).route.kind).toBe("model");
     expect(routeMessage("Change it", student, true).route.kind).toBe("model");
+  });
+});
+
+describe("focusAfterChipClick", () => {
+  it("focuses after a keyboard activation (detail 0) only", () => {
+    expect(focusAfterChipClick(0)).toBe(true);
+    expect(focusAfterChipClick(1)).toBe(false);
+    expect(focusAfterChipClick(2)).toBe(false);
   });
 });

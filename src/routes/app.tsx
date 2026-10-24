@@ -9,7 +9,7 @@ import {
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
-import { asChips, defaultChips, fallbackChips, modelTurnChips, routeMessage, withOther, type Chip } from "@/lib/mentorChips";
+import { asChips, defaultChips, fallbackChips, focusAfterChipClick, modelTurnChips, routeMessage, withOther, type Chip } from "@/lib/mentorChips";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunityList } from "@/components/OpportunityList";
@@ -522,12 +522,13 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
     if (el) el.scrollTop = el.scrollHeight;
   }, [msgs]);
   // Typed text and chip clicks both come through here, so a chip says exactly what its label says.
-  const send = (raw: string, fromChip = false) => {
+  const send = (raw: string, fromChip = false, focusInput = false) => {
     const { message, route } = routeMessage(raw, s, pending !== null, fromChip);
     if (route.kind === "ignore") return;
-    // After a chip click, keyboard focus goes back to the text box ("Something else" only does that).
+    // "Something else" always focuses the text box; another chip only after a keyboard activation,
+    // since focusing after a tap would pop up the on-screen keyboard on a phone.
     // preventScroll: on a narrow screen focusing would otherwise scroll the window to the panel.
-    if (fromChip) inputRef.current?.focus({ preventScroll: true });
+    if (route.kind === "focus" || (fromChip && focusInput)) inputRef.current?.focus({ preventScroll: true });
     if (route.kind === "focus") return;
     if (!fromChip) setText("");
     setMsgs((current) => [...current, { me: true, text: message }]);
@@ -603,7 +604,7 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
                 type="button"
                 title={chip.text}
                 aria-label={chip.text}
-                onClick={() => send(chip.text, true)}
+                onClick={(e) => send(chip.text, true, focusAfterChipClick(e.detail))}
                 className="max-w-full rounded-full border bg-background px-2.5 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {chip.label}

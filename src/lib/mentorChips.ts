@@ -314,3 +314,11 @@ export function resolveChip(label: string, student: Student, fromChip = false): 
   }
   return { kind: "model" };
 }
+
+/**
+ * Whether a chip click should move focus back to the text box. Only a keyboard activation (Enter or
+ * Space gives `click` event detail 0) does; a mouse or touch tap would pop up the on-screen keyboard.
+ */
+export function focusAfterChipClick(detail: number): boolean {
+  return detail === 0;
+}
