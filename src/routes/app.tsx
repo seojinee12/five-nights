@@ -7,6 +7,7 @@ import {
   type DayWindow, type Student, type Category, type Task, type Course, type Reminder,
 } from "@/lib/launchpad";
 import { importCalendarFile } from "@/lib/calendar-import";
+import { placeEvents } from "@/lib/eventLayout";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
 import { asChips, defaultChips, fallbackChips, focusAfterChipClick, modelTurnChips, routeMessage, trackRequest, withOther, type Chip } from "@/lib/mentorChips";
@@ -350,10 +351,10 @@ function WeekView({ s, gaps, win }: { s: Student; gaps: ReturnType<typeof findGa
                 className={`absolute inset-x-0.5 rounded-sm ${g.type === "free" ? "hatch-free" : g.type === "lazy" ? "hatch-lazy" : "bg-pseudo"}`}
                 style={{ top: top(g.start), height: (g.end - g.start) * H }} />
             ))}
-            {s.events.filter((e) => e.day === d && e.end > win.start && e.start < win.end).map((e, i) => (
+            {placeEvents(s.events.filter((e) => e.day === d && e.end > win.start && e.start < win.end), 12 / H).map(({ event: e, column, columns }, i) => (
               <div key={i} title={`${e.title} ${fmt(e.start)}–${fmt(e.end)}`}
-                className={`absolute inset-x-0.5 overflow-hidden rounded-sm px-1 text-[10px] leading-tight text-primary-foreground ${e.kind === "class" ? "bg-class" : e.kind === "task" ? "bg-task" : "bg-life"}`}
-                style={{ top: top(Math.max(e.start, win.start)), height: Math.max(12, (Math.min(e.end, win.end) - Math.max(e.start, win.start)) * H - 1) }}>
+                className={`absolute overflow-hidden rounded-sm px-1 text-[10px] leading-tight text-primary-foreground ${e.kind === "class" ? "bg-class" : e.kind === "task" ? "bg-task" : "bg-life"}`}
+                style={{ top: top(Math.max(e.start, win.start)), height: Math.max(12, (Math.min(e.end, win.end) - Math.max(e.start, win.start)) * H - 1), left: `calc(${(column / columns) * 100}% + 2px)`, width: `calc(${100 / columns}% - 4px)` }}>
                 <b>{e.title}</b>
               </div>
             ))}
