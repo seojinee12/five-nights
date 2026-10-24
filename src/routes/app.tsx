@@ -523,10 +523,9 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
   const send = (raw: string, fromChip = false) => {
     const { message, route } = routeMessage(raw, s, pending !== null, fromChip);
     if (route.kind === "ignore") return;
-    if (route.kind === "focus") {
-      inputRef.current?.focus();
-      return;
-    }
+    // After a chip click, keyboard focus goes back to the text box ("Something else" only does that).
+    if (fromChip) inputRef.current?.focus();
+    if (route.kind === "focus") return;
     if (!fromChip) setText("");
     setMsgs((current) => [...current, { me: true, text: message }]);
     if (route.kind === "apply" && pending) {
@@ -579,7 +578,12 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
         <b className="text-sm">Mentor</b>
         <span className="ml-auto rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground">Grok</span>
       </div>
-      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3 text-sm">
+      <div
+        ref={listRef}
+        role="log"
+        aria-live="polite"
+        className="flex-1 space-y-3 overflow-y-auto p-3 text-sm"
+      >
         {msgs.map((m, i) => (
           <div key={i} className={m.me ? "ml-8 rounded-lg bg-primary p-2.5 text-primary-foreground" : "mr-4"}>
             {m.text}
@@ -595,7 +599,7 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
                 key={label}
                 type="button"
                 onClick={() => send(label, true)}
-                className="rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="max-w-full rounded-full border bg-background px-2.5 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {label}
               </button>
@@ -608,7 +612,7 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
         <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md border px-2 text-muted-foreground hover:bg-muted" aria-label="Upload a file"><Paperclip className="h-4 w-4" /></button>
         <input ref={inputRef} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send(text)}
           placeholder="I have a midterm Thursday…" className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-        <button onClick={() => send(text)} className="rounded-md bg-accent px-3 text-accent-foreground"><Send className="h-4 w-4" /></button>
+        <button onClick={() => send(text)} aria-label="Send" className="rounded-md bg-accent px-3 text-accent-foreground"><Send className="h-4 w-4" /></button>
       </div>
     </aside>
   );
