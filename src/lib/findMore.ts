@@ -116,7 +116,8 @@ function oneLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-export function findMorePrompt(input: FindMoreInput): string {
+export function findMorePrompt(input: FindMoreInput, options: { search?: boolean } = {}): string {
+  const search = options.search ?? true;
   const profile = [
     input.year ? `year: ${oneLine(input.year)}` : "",
     input.major ? `major: ${oneLine(input.major)}` : "",
@@ -124,7 +125,9 @@ export function findMorePrompt(input: FindMoreInput): string {
     input.goals.length ? `goals: ${input.goals.map(oneLine).join("; ")}` : "",
   ].filter(Boolean);
   return [
-    "Use Google Search. Find additional real, current opportunities for a UC San Diego undergraduate.",
+    search
+      ? "Use Google Search. Find additional real, current opportunities for a UC San Diego undergraduate."
+      : "You cannot browse the web. From what you reliably know, list additional real opportunities for a UC San Diego undergraduate. Only include one if you are confident it exists and you know its official https page; otherwise leave it out and return fewer items or empty lists.",
     `Student: ${profile.join(" | ") || "no details given"}.`,
     "Tailor them to the student's interests and goals, and make sure they suit the student's year and major.",
     "Split them into research labs and project teams, internships or other programs.",
@@ -133,6 +136,77 @@ export function findMorePrompt(input: FindMoreInput): string {
     `Do NOT include any of these, which the student already has (names or URLs): ${input.exclude.map(oneLine).join(" ; ")}`,
     'Return JSON only: {"research": [], "projects": []}.',
   ].join(" ");
+}
+
+export interface FoundOpportunity {
+  name: string;
+  sub?: string;
+  what: string;
+  url: string;
+}
+
+const FoundItemSchema = z.object({
+  name: z.string().trim().min(1),
+  what: z.string().trim().min(1),
+  url: z.string().trim(),
+  sub: z.string().trim().optional(),
+});
+
+/** True for an https link on a real-looking public host (not a search page, a placeholder or an address). */
+export function looksOfficial(url: string): boolean {
+  if (!url.startsWith("https://")) return false;
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (
+    !host.includes(".") ||
+    /^[\d.]+$/.test(host) ||
+    host.endsWith(".local") ||
+    host.endsWith(".test")
+  ) {
+    return false;
+  }
+  if (host.includes("google.") || host.includes("vertexaisearch")) return false;
+  if (/(^|\.)(example|localhost|yourdomain|domain)\.(com|org|edu|net)$/.test(host)) return false;
+  if (/(^|\.)example\./.test(host)) return false;
+  return true;
+}
+
+/** Validates a model's list of items, keeping only well-formed ones with an official-looking https link. */
+export function sanitizeFoundItems(value: unknown): FoundOpportunity[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw) => {
+    const parsed = FoundItemSchema.safeParse(raw);
+    if (!parsed.success || !looksOfficial(parsed.data.url)) return [];
+    const { name, what, url, sub } = parsed.data;
+    const item: FoundOpportunity = { name: name.slice(0, 80), what: what.slice(0, 280), url };
+    if (sub) item.sub = sub.slice(0, 80);
+    return [item];
+  });
+}
+
+/** Reads a JSON object out of a model reply, tolerating code fences and surrounding text. */
+export function parseJsonObject(text: string): unknown {
+  const trimmed = text
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/, "");
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+    try {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
 }
 
 export const FIND_MORE_MESSAGES = {
