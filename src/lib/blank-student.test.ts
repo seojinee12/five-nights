@@ -108,4 +108,26 @@ describe("parseProfile", () => {
     expect(parseProfile("[1]")).toEqual({});
     expect(parseProfile("null")).toEqual({});
   });
+
+  it("keeps only the form's three answers, even if more is stored under the key", () => {
+    const stale = JSON.stringify({
+      name: "Ada",
+      major: "Bioengineering",
+      focus: ["career"],
+      courses: [{ code: "ECE 5" }],
+      events: [{ day: 0, start: 9, end: 10, title: "MATH 20A", kind: "class" }],
+      tasks: [{ id: "t1", title: "Date night" }],
+      resume: { name: "Seojin" },
+    });
+    expect(parseProfile(stale)).toEqual({
+      name: "Ada",
+      major: "Bioengineering",
+      focus: ["career"],
+    });
+    const me = blankStudent(parseProfile(stale));
+    expect(me.courses).toHaveLength(0);
+    expect(me.events).toHaveLength(0);
+    expect(me.tasks).toHaveLength(0);
+    expect(me.resume).toBeUndefined();
+  });
 });

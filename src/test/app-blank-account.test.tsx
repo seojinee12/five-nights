@@ -140,4 +140,45 @@ describe("/app?u=me", () => {
     await waitFor(() => expect(ask).toHaveBeenCalled());
     expect(ask).toHaveBeenLastCalledWith(undefined);
   });
+
+  const CLASS_LIKE = /\b(ECE|MATH|PHYS|CSE|BILD|CHEM)\s?\d+[A-Z]?\b|\bDisc\b|\blecture\b/;
+
+  it("ignores stale demo data left in the browser by an earlier session", async () => {
+    localStorage.setItem(
+      "lp-profile",
+      JSON.stringify({
+        name: "Ada",
+        major: "Computer Engineering",
+        courses: [{ code: "ECE 5", name: "Intro", units: 4 }],
+        events: [{ day: 0, start: 9, end: 10, title: "MATH 20A", kind: "class" }],
+        tasks: [
+          { id: "t1", title: "Study for MATH 20A midterm", category: "academic", timed: false },
+        ],
+      }),
+    );
+    localStorage.setItem("lp-day-window", JSON.stringify({ start: 8, end: 20 }));
+    localStorage.setItem("lp-student", JSON.stringify({ courses: [{ code: "PHYS 2A" }] }));
+    await renderApp("me");
+    for (const tab of ["Scheduler", "Working on", "Academics", "Opportunities", "Long-term"]) {
+      fireEvent.click(screen.getByRole("button", { name: tab }));
+      const text = document.body.textContent ?? "";
+      expect(text, tab).not.toMatch(CLASS_LIKE);
+      expect(document.querySelectorAll("div[title] > b"), tab).toHaveLength(0);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Academics" }));
+    expect(screen.getByText("No courses yet.")).toBeInTheDocument();
+  });
+
+  it("does not label an empty week with Class, Task or Life, and still does for the demos", async () => {
+    await renderApp("me");
+    expect(screen.queryByText("Class")).not.toBeInTheDocument();
+    expect(screen.queryByText("Task")).not.toBeInTheDocument();
+    expect(screen.queryByText("Life")).not.toBeInTheDocument();
+    expect(screen.getByText("Free")).toBeInTheDocument();
+    cleanup();
+    await renderApp("seojin");
+    expect(screen.getByText("Class")).toBeInTheDocument();
+    expect(screen.getByText("Task")).toBeInTheDocument();
+    expect(screen.getByText("Life")).toBeInTheDocument();
+  });
 });
