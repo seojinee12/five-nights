@@ -504,6 +504,8 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
   // Live events, so the overlap check below sees the schedule as it is when the reply lands.
   const eventsRef = useRef(s.events);
   eventsRef.current = s.events;
+  const studentNow = useRef(s);
+  studentNow.current = s;
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -511,7 +513,7 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
   useEffect(() => {
     if (!note || seenNote.current === note.id) return;
     seenNote.current = note.id;
-    setMsgs((current) => [...current, { me: false, text: note.text, choices: fallbackChips(note.patch !== null ? "pending" : "start", s) }]);
+    setMsgs((current) => [...current, { me: false, text: note.text, choices: fallbackChips(note.patch !== null ? "pending" : "start", studentNow.current) }]);
     setPending(note.patch);
   }, [note]);
   // Scroll the list itself: scrollIntoView would also scroll the window to the panel on narrow screens.
