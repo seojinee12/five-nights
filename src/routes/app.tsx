@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Rocket, Upload, CalendarPlus, Send, AlertTriangle, ExternalLink, Check, Paperclip, Plus, Pin, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Rocket, Upload, CalendarPlus, Send, AlertTriangle, ExternalLink, Check, Paperclip, Plus, Pin, MoreHorizontal, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   STUDENTS, SEOJIN, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
@@ -344,6 +344,8 @@ function Academics({ s, onSyllabus, onChange }: { s: Student; onSyllabus: () => 
 
 function CourseBlock({ course, onChange }: { course: Course; onChange: (course: Course) => void }) {
   const [pane, setPane] = useState<"tasks" | "short" | "long">("tasks");
+  const [open, setOpen] = useState(false);
+  const count = (course.subtasks?.length ?? 0) + (course.goals?.length ?? 0);
   const panes = [
     ["tasks", "Tasks"],
     ["short", "Short-term"],
@@ -352,32 +354,38 @@ function CourseBlock({ course, onChange }: { course: Course; onChange: (course: 
   const horizon = pane === "short" ? "short" : "long";
   return (
     <li className="py-3 text-sm">
-      <div className="flex items-center gap-3">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 text-left">
+        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
         <span className="w-24 font-mono font-semibold">{course.code}</span>
         <span className="flex-1">{course.name}</span>
+        {count > 0 && !open && <span className="font-mono text-xs text-muted-foreground">{count} items</span>}
         <span className="font-mono text-xs text-muted-foreground">{course.units}u</span>
         <span className="w-8 text-right font-semibold">{course.grade ?? "IP"}</span>
-      </div>
-      <div className="mt-2 flex gap-1 text-xs">
-        {panes.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setPane(id)}
-            className={`rounded-md px-2 py-1 ${pane === id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{label}</button>
-        ))}
-      </div>
-      {pane === "tasks" ? (
-        <ItemList
-          items={course.subtasks ?? []}
-          placeholder="Add a coursework step"
-          onChange={(id, title) => onChange({ ...course, subtasks: (course.subtasks ?? []).map((item) => item.id === id ? { ...item, title } : item) })}
-          onAdd={(title) => onChange({ ...course, subtasks: [...(course.subtasks ?? []), { id: nid(), title }] })}
-        />
-      ) : (
-        <ItemList
-          items={(course.goals ?? []).filter((goal) => goal.horizon === horizon)}
-          placeholder={pane === "short" ? "Add a short-term goal" : "Add a long-term goal"}
-          onChange={(id, title) => onChange({ ...course, goals: (course.goals ?? []).map((goal) => goal.id === id ? { ...goal, title } : goal) })}
-          onAdd={(title) => onChange({ ...course, goals: [...(course.goals ?? []), { id: nid(), title, horizon }] })}
-        />
+      </button>
+      {open && (
+        <>
+          <div className="mt-2 flex gap-1 text-xs">
+            {panes.map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setPane(id)}
+                className={`rounded-md px-2 py-1 ${pane === id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{label}</button>
+            ))}
+          </div>
+          {pane === "tasks" ? (
+            <ItemList
+              items={course.subtasks ?? []}
+              placeholder="Add a coursework step"
+              onChange={(id, title) => onChange({ ...course, subtasks: (course.subtasks ?? []).map((item) => item.id === id ? { ...item, title } : item) })}
+              onAdd={(title) => onChange({ ...course, subtasks: [...(course.subtasks ?? []), { id: nid(), title }] })}
+            />
+          ) : (
+            <ItemList
+              items={(course.goals ?? []).filter((goal) => goal.horizon === horizon)}
+              placeholder={pane === "short" ? "Add a short-term goal" : "Add a long-term goal"}
+              onChange={(id, title) => onChange({ ...course, goals: (course.goals ?? []).map((goal) => goal.id === id ? { ...goal, title } : goal) })}
+              onAdd={(title) => onChange({ ...course, goals: [...(course.goals ?? []), { id: nid(), title, horizon }] })}
+            />
+          )}
+        </>
       )}
     </li>
   );
