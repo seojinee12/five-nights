@@ -65,11 +65,8 @@ export const findMoreOpportunities = createServerFn({ method: "POST" })
   .validator((data: unknown) => parseFindMoreInput(data))
   .handler(async ({ data }): Promise<OpportunityLists | null> => {
     try {
-      const { findMoreWithFallback } = await import("./findMore.fallback.server");
-      return await findMoreWithFallback(data, async (input) => {
-        const { findMoreOpportunities: find } = await import("./mentor.server");
-        return find(input);
-      });
+      const { findMoreOpportunities: find } = await import("./mentor.server");
+      return await find(data);
     } catch {
       return null;
     }

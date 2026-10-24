@@ -16,13 +16,13 @@ const block = (day: number, start: number, end: number): CalEvent => ({
   title: "Study block",
   kind: "task",
 });
-// What a good model answers for Seojin's week: free gaps, a 10 minute walk after classes left empty.
+// What a good model answers for Seojin's week: free gaps, a 10 minute walk after classes left empty, and Friday's 2-3 PM lunch kept clear.
 const SIX = [
   block(0, 17.5, 20.5),
   block(1, 7.5, 10.5),
   block(2, 17.5, 20.5),
   block(3, 7.5, 10.5),
-  block(4, 14, 17),
+  block(4, 15, 18),
   block(5, 9, 14),
 ];
 const overlaps = (events: CalEvent[]) =>
