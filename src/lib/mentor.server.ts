@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { calendarPrompt, eventsFromModel, parseIsoDate, type CalendarRequest } from "./calendar-gemini";
+import type { CalEvent } from "./launchpad";
 import { sanitizePatch, type Patch } from "./patch";
 
 export type Turn = { reply: string; patch: Patch | null };
@@ -66,6 +68,23 @@ export async function readMaterial(body: MaterialBody): Promise<Turn> {
   if (body.base64) parts.push({ inlineData: { mimeType: body.mime || "application/pdf", data: body.base64 } });
   parts.push({ text: body.text ? `${instruction}\n\n${body.text.slice(0, 20000)}` : instruction });
   return geminiTurnParts(parts);
+}
+
+/**
+ * Reads a calendar (ics text, schedule text, or a screenshot/PDF) with Gemini and returns
+ * validated events for the week, or null when it cannot be used (no key, failed call, bad reply).
+ */
+export async function calendarEventsFromGemini(body: CalendarRequest): Promise<CalEvent[] | null> {
+  const weekMonday = parseIsoDate(body.weekStart);
+  if (!weekMonday) return null;
+  const parts: Record<string, unknown>[] = [{ text: calendarPrompt(body.weekStart, Boolean(body.text)) }];
+  if (body.base64) parts.push({ inlineData: { mimeType: body.mime || "application/pdf", data: body.base64 } });
+  if (body.text) parts.push({ text: body.text });
+  const result = await geminiText(parts, false);
+  if (!result.text) return null;
+  const parsed = jsonFrom(result.text);
+  if (parsed === null) return null;
+  return eventsFromModel(parsed, weekMonday);
 }
 
 export async function loadOpportunities(): Promise<OpportunityLists | null> {
