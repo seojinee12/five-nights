@@ -64,8 +64,9 @@ LABS = [
     ("Pamela Cosman Lab", "Prof. Pamela Cosman", "Wireless media and engineering education.", "https://cosman.ucsd.edu/", "cosman.ucsd.edu"),
     ("San Diego Supercomputer Center", "Undergraduate internships", "High-performance computing and data.", "https://interns.sdsc.edu/", "interns.sdsc.edu"),
 ]
+RANKED_LABS = {"Engineers for Exploration", "Contextual Robotics Institute", "Existential Robotics Laboratory", "Pamela Cosman Lab"}  # shown in the ranked list
 TEAMS = [
-    ("IEEE at UCSD — Quarterly Projects", "Beginner teams, funded hardware, Jacobs Hall.", "https://ieeeatucsd.org/project", "ieeeatucsd.org/project"),
+    ("IEEE at UCSD — Quarterly Projects", "Beginner teams, funded hardware, Jacobs Hall.", "https://ieeeatucsd.org/projects/quarterly", "ieeeatucsd.org/projects/quarterly"),
     ("E4E student projects", "Open recruitment for field hardware.", "https://e4e.ucsd.edu/", "e4e.ucsd.edu"),
     ("SDSC student cluster training", "A path into the internship program.", "https://www.sdsc.edu/education/internships.html", "sdsc.edu/education/internships"),
     ("Triton Robosub beginner track", "Firmware and sensors, with a mentor.", "https://tritonrobosub.com/", "tritonrobosub.com"),
@@ -703,44 +704,39 @@ def render_classes(profile: StudentProfile, demo: bool) -> None:
         persist_personal()
 
 
-TYPE_BADGE = {
-    "research": "#1D4ED8", "internship": "#9A3412", "club": "#6D28D9", "project": "#0F766E",
-    "hackathon": "#BE123C", "scholarship": "#A16207", "event": "#475569",
-}
-
-
-def render_opportunities(profile: StudentProfile) -> None:
+def render_opportunities(profile: StudentProfile, heading: str) -> None:
     planner: Optional[Planner] = st.session_state.get("planner")
     goals = [g.title for g in (planner.short_goals + planner.long_goals)] if planner else []
     ranked = refine_reasons(rank_opportunities(profile, goals=goals), profile, st.session_state.get("gemini_service"))
-    st.markdown("#### Best fits for you")
-    st.caption("Ranked from your year, major, skills, interests, and goals. The score is out of 100.")
+    st.markdown(f"#### {heading}")
 
     def card(item) -> None:
-        opp, color = item.opportunity, TYPE_BADGE.get(item.opportunity.type, "#475569")
-        link = f' · <a href="{escape(opp.url)}" target="_blank">{escape(opp.url.split("//")[-1].rstrip("/"))}</a>' if opp.url else ""
+        opp = item.opportunity
+        title = f'<a href="{escape(opp.url)}" target="_blank">{escape(opp.title)}</a>' if opp.url else escape(opp.title)
         st.markdown(
-            f'<div class="soft-card"><span style="background:{color};color:#fff;border-radius:999px;padding:2px 10px;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em">{escape(opp.type)}</span> '
-            f'<strong>{escape(opp.title)}</strong> · {item.score}/100<br>{escape(opp.summary)}<br>'
-            f'<em>Why: {escape(item.why)}</em>{link}</div>',
+            f'<div class="soft-card"><span class="lp-kicker">{escape(opp.type)}</span><br>'
+            f'<strong>{title}</strong> · {item.score}/100<br><em>Why: {escape(item.why)}</em></div>',
             unsafe_allow_html=True,
         )
 
-    for item in ranked[:6]:
+    for item in ranked[:3]:
         card(item)
-    with st.expander(f"See the other {len(ranked) - 6} opportunities"):
-        for item in ranked[6:]:
-            card(item)
+    if len(ranked) > 3:
+        with st.expander(f"See {len(ranked) - 3} more"):
+            for item in ranked[3:]:
+                card(item)
 
 
 def render_career(profile: StudentProfile, demo: bool) -> None:
-    render_opportunities(profile)
+    render_opportunities(profile, "Best fits for you" if demo else "Career")
     if demo:
         st.markdown("#### Labs and teams")
         st.caption("Real UC San Diego pages. Academia still comes first; these are the career step.")
         left, right = st.columns(2, gap="large")
         with left:
             for name, lead, blurb, url, label in LABS:
+                if name in RANKED_LABS:
+                    continue
                 st.markdown(f'<div class="soft-card"><strong>{name}</strong><br>{lead}<br>{blurb}<br><a href="{url}" target="_blank">{label}</a></div>', unsafe_allow_html=True)
         with right:
             for name, blurb, url, label in TEAMS:
@@ -757,7 +753,6 @@ def render_career(profile: StudentProfile, demo: bool) -> None:
                 if st.session_state.get("show_email"):
                     st.text_area("Draft", key="email_box", height=220)
         return
-    st.markdown("#### Career")
     aim = st.text_input("What you want this to move toward", value=profile.career_goal or "", key="career_aim")
     notes = st.text_area("Notes", value=profile.notes or "", key="career_notes", height=100)
     if st.button("Save and ask Gemini to fit the week", key="save_career"):

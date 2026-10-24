@@ -153,7 +153,7 @@ UCSD_OPPORTUNITIES: List[UCSDOpportunity] = [
         summary="Hardware, sensors, and field projects for conservation.", url="https://e4e.ucsd.edu/",
         tags=["sensors", "hardware", "embedded systems", "field projects", "wearable", "conservation"], majors=_ECE, min_year=1, max_year=4),
     UCSDOpportunity(id="ieee-projects", title="IEEE at UCSD quarterly projects", type="club", org="IEEE at UCSD",
-        summary="Beginner hardware teams with funded parts.", url="https://ieeeatucsd.org/",
+        summary="Beginner hardware teams with funded parts.", url="https://ieeeatucsd.org/projects/quarterly",
         tags=["hardware", "circuits", "embedded systems", "arduino", "projects", "robotics"], majors=_ECE, min_year=1, max_year=3),
     UCSDOpportunity(id="robosub", title="Triton Robosub beginner track", type="project", org="Triton Robosub",
         summary="Firmware and sensors for an autonomous submarine, with a mentor.", url="https://tritonrobosub.com/",
