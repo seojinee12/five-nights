@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { CalEvent, Task } from "./launchpad";
 import { SEOJIN } from "./launchpad";
-import { DAY_END, DAY_START, dueRank, findGaps, sortTasks, timeUse } from "./schedule";
+import {
+  DAY_END,
+  DAY_START,
+  DEFAULT_WINDOW,
+  dueRank,
+  findGaps,
+  isValidWindow,
+  normalizeWindow,
+  sortTasks,
+  timeUse,
+  weekHours,
+} from "./schedule";
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
   id,
@@ -208,5 +219,105 @@ describe("timeUse", () => {
     const use = timeUse(events, gaps);
     const day0 = gaps.filter((g) => g.day === 0).reduce((s, g) => s + g.end - g.start, 0);
     expect(use.allocated + use.reallocate + day0).toBeCloseTo(DAY_END - DAY_START, 5);
+  });
+});
+
+describe("day window", () => {
+  const W = { start: 8, end: 22 };
+
+  it("defaults to 6am-11pm: 17h a day, 119h a week, with 49h outside", () => {
+    expect(DEFAULT_WINDOW).toEqual({ start: 6, end: 23 });
+    expect(weekHours()).toBe(119);
+    expect(weekHours(DEFAULT_WINDOW)).toBe(119);
+    expect(24 * 7 - weekHours()).toBe(49);
+  });
+  it("a custom window changes the total: 8am-10pm is 98h", () => {
+    expect(weekHours(W)).toBe(98);
+    expect(weekHours({ start: 0, end: 24 })).toBe(168);
+  });
+  it("default arguments give the same results as an explicit default window", () => {
+    const events = [
+      ev(0, 9, 11, "class"),
+      ev(0, 10, 12, "life"),
+      ev(1, 5, 7, "task"),
+      ev(2, 22, 24),
+    ];
+    const gaps = findGaps(events, "behind");
+    expect(findGaps(events, "behind", DEFAULT_WINDOW)).toEqual(gaps);
+    expect(timeUse(events, gaps)).toEqual(timeUse(events, gaps, DEFAULT_WINDOW));
+  });
+  it("findGaps stays inside the window", () => {
+    const gaps = findGaps([ev(0, 9, 10)], "on-track", W);
+    expect(gaps.filter((g) => g.day === 0).map((g) => [g.start, g.end])).toEqual([
+      [8, 9],
+      [10, 22],
+    ]);
+    expect(gaps.every((g) => g.start >= 8 && g.end <= 22)).toBe(true);
+    const empty = findGaps([], "on-track", W).filter((g) => g.day === 3);
+    expect(empty).toEqual([{ day: 3, start: 8, end: 22, type: "free" }]);
+  });
+  it("findGaps ignores events entirely outside and clips partial ones", () => {
+    const gaps = findGaps([ev(0, 6, 7), ev(0, 21, 23.5), ev(0, 7, 9)], "on-track", W);
+    expect(gaps.filter((g) => g.day === 0).map((g) => [g.start, g.end])).toEqual([[9, 21]]);
+  });
+  it("timeUse clips events to the window: outside ignored, partial counted inside only", () => {
+    const events = [
+      ev(0, 6, 7.5, "class"), // entirely outside 8-22
+      ev(0, 7, 9, "class"), // 1h inside
+      ev(1, 21, 24, "task"), // 1h inside
+      ev(2, 23, 24, "life"), // outside
+    ];
+    const gaps = findGaps(events, "on-track", W);
+    expect(timeUse(events, gaps, W)).toMatchObject({ allocated: 2, reallocate: 0 });
+  });
+  it("timeUse ignores gaps that fall outside the window it is given", () => {
+    const wide = findGaps([], "on-track", DEFAULT_WINDOW);
+    expect(timeUse([], wide, W).recompensate).toBe(98);
+  });
+  it("allocated + reallocate + recompensate never exceed the week's total", () => {
+    const events = [ev(0, 9, 11, "class"), ev(0, 10.1, 12, "life"), ev(4, 19, 21, "life")];
+    for (const window of [DEFAULT_WINDOW, W, { start: 0, end: 24 }, { start: 10, end: 14 }]) {
+      const gaps = findGaps(events, "behind", window);
+      const use = timeUse(events, gaps, window);
+      expect(use.allocated + use.reallocate + use.recompensate).toBeLessThanOrEqual(
+        weekHours(window) + 1e-9,
+      );
+    }
+  });
+  it("an event-heavy day over a short window cannot exceed the window", () => {
+    const window = { start: 10, end: 14 };
+    const events = [ev(0, 0, 24, "class"), ev(0, 9, 15, "task")];
+    expect(timeUse(events, findGaps(events, "on-track", window), window).allocated).toBe(4);
+  });
+  it("validates windows: start < end, 4h minimum, 0-24, half hours", () => {
+    expect(isValidWindow({ start: 6, end: 23 })).toBe(true);
+    expect(isValidWindow({ start: 0, end: 24 })).toBe(true);
+    expect(isValidWindow({ start: 8.5, end: 22 })).toBe(true);
+    expect(isValidWindow({ start: 10, end: 14 })).toBe(true);
+    expect(isValidWindow({ start: 10, end: 13.5 })).toBe(false);
+    expect(isValidWindow({ start: 12, end: 8 })).toBe(false);
+    expect(isValidWindow({ start: 8, end: 8 })).toBe(false);
+    expect(isValidWindow({ start: -1, end: 10 })).toBe(false);
+    expect(isValidWindow({ start: 6, end: 25 })).toBe(false);
+    expect(isValidWindow({ start: 6.25, end: 20 })).toBe(false);
+    expect(isValidWindow({ start: Number.NaN, end: 20 })).toBe(false);
+    expect(isValidWindow({ start: "6", end: 20 })).toBe(false);
+    expect(isValidWindow(null)).toBe(false);
+  });
+  it("normalizeWindow falls back to the default and returns a copy", () => {
+    expect(normalizeWindow({ start: 12, end: 8 })).toEqual(DEFAULT_WINDOW);
+    expect(normalizeWindow(undefined)).toEqual(DEFAULT_WINDOW);
+    const copy = normalizeWindow({ start: 7, end: 20 });
+    expect(copy).toEqual({ start: 7, end: 20 });
+    expect(normalizeWindow(null)).not.toBe(DEFAULT_WINDOW);
+  });
+  it("normalizeWindow coerces to whole hours: start rounds down, end rounds up", () => {
+    expect(normalizeWindow({ start: 6.5, end: 22.5 })).toEqual({ start: 6, end: 23 });
+    expect(normalizeWindow({ start: 8.5, end: 22 })).toEqual({ start: 8, end: 22 });
+    expect(normalizeWindow({ start: 6.25, end: 23.9 })).toEqual({ start: 6, end: 24 });
+    expect(normalizeWindow({ start: 20.5, end: 24 })).toEqual({ start: 20, end: 24 });
+    expect(normalizeWindow({ start: 21.5, end: 24 })).toEqual(DEFAULT_WINDOW);
+    expect(normalizeWindow({ start: -0.5, end: 10 })).toEqual(DEFAULT_WINDOW);
+    expect(normalizeWindow({ start: "6", end: 22 })).toEqual(DEFAULT_WINDOW);
   });
 });

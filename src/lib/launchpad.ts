@@ -330,12 +330,26 @@ export const STUDENTS: Student[] = [
   },
 ];
 
-export { DAY_START, DAY_END, sortTasks, dueRank, findGaps, timeUse } from "./schedule";
+export {
+  DAY_START,
+  DAY_END,
+  DEFAULT_WINDOW,
+  MIN_WINDOW_HOURS,
+  sortTasks,
+  dueRank,
+  findGaps,
+  timeUse,
+  isValidWindow,
+  normalizeWindow,
+  windowHours,
+  weekHours,
+} from "./schedule";
+export type { DayWindow } from "./schedule";
 export type { Gap } from "./schedule";
 
 export const fmt = (h: number) => {
   const hr = Math.floor(h), m = Math.round((h - hr) * 60);
-  const ap = hr >= 12 ? "p" : "a";
+  const ap = hr % 24 >= 12 ? "p" : "a"; // 24 reads as 12a (midnight)
   return `${((hr + 11) % 12) + 1}${m ? ":" + String(m).padStart(2, "0") : ""}${ap}`;
 };
 
