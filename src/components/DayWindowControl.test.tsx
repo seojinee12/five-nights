@@ -12,6 +12,14 @@ describe("DayWindowControl", () => {
     }) as HTMLOptionElement;
     expect(earlyEnd.disabled).toBe(true);
   });
+  it("labels the 24:00 end option as midnight", () => {
+    render(<DayWindowControl value={{ start: 0, end: 24 }} onChange={() => {}} />);
+    expect(screen.getByLabelText("My day ends")).toHaveValue("24");
+    expect(screen.getByRole("option", { name: "12:00 AM (midnight)" })).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("My day starts")).getByRole("option", { name: "12:00 AM" }),
+    ).toBeInTheDocument();
+  });
   it("reports a valid change", () => {
     const onChange = vi.fn();
     render(<DayWindowControl value={{ start: 6, end: 23 }} onChange={onChange} />);

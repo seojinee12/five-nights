@@ -23,9 +23,20 @@ export function isValidWindow(window: unknown): window is DayWindow {
   return half(start) && half(end) && end - start >= MIN_WINDOW_HOURS;
 }
 
-/** The window if it is valid, otherwise the default (6am–11pm). */
+/**
+ * A usable window from untrusted input (for example hand-edited storage): whole hours only, with
+ * the start rounded down and the end rounded up, so 6:30 becomes 6 and 22:30 becomes 23.
+ * Anything still invalid gives the default (6am–11pm).
+ */
 export function normalizeWindow(window: unknown): DayWindow {
-  return isValidWindow(window) ? { start: window.start, end: window.end } : { ...DEFAULT_WINDOW };
+  if (window && typeof window === "object") {
+    const { start, end } = window as Partial<DayWindow>;
+    if (typeof start === "number" && typeof end === "number") {
+      const whole = { start: Math.floor(start), end: Math.ceil(end) };
+      if (isValidWindow(whole)) return whole;
+    }
+  }
+  return { ...DEFAULT_WINDOW };
 }
 
 export const windowHours = (window: DayWindow = DEFAULT_WINDOW) => window.end - window.start;

@@ -311,4 +311,13 @@ describe("day window", () => {
     expect(copy).toEqual({ start: 7, end: 20 });
     expect(normalizeWindow(null)).not.toBe(DEFAULT_WINDOW);
   });
+  it("normalizeWindow coerces to whole hours: start rounds down, end rounds up", () => {
+    expect(normalizeWindow({ start: 6.5, end: 22.5 })).toEqual({ start: 6, end: 23 });
+    expect(normalizeWindow({ start: 8.5, end: 22 })).toEqual({ start: 8, end: 22 });
+    expect(normalizeWindow({ start: 6.25, end: 23.9 })).toEqual({ start: 6, end: 24 });
+    expect(normalizeWindow({ start: 20.5, end: 24 })).toEqual({ start: 20, end: 24 });
+    expect(normalizeWindow({ start: 21.5, end: 24 })).toEqual(DEFAULT_WINDOW);
+    expect(normalizeWindow({ start: -0.5, end: 10 })).toEqual(DEFAULT_WINDOW);
+    expect(normalizeWindow({ start: "6", end: 22 })).toEqual(DEFAULT_WINDOW);
+  });
 });

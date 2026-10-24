@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { loadWindow, saveWindow, timeLabel, windowOptions, withWindowChange } from "./dayWindow";
+import {
+  endLabel,
+  loadWindow,
+  saveWindow,
+  timeLabel,
+  windowOptions,
+  withWindowChange,
+} from "./dayWindow";
 import { fmt } from "./launchpad";
 
 function memory(initial: Record<string, string> = {}) {
@@ -21,6 +28,12 @@ describe("labels", () => {
     expect(timeLabel(0)).toBe("12:00 AM");
     expect(timeLabel(24)).toBe("12:00 AM");
     expect(timeLabel(8.5)).toBe("8:30 AM");
+  });
+  it("labels the end of day at 24 as midnight, and leaves other end times alone", () => {
+    expect(endLabel(24)).toBe("12:00 AM (midnight)");
+    expect(endLabel(23)).toBe("11:00 PM");
+    expect(endLabel(12)).toBe("12:00 PM");
+    expect(timeLabel(0)).toBe("12:00 AM");
   });
   it("fmt reads 24 as midnight", () => {
     expect(fmt(24)).toBe("12a");
@@ -60,6 +73,15 @@ describe("persistence", () => {
       loadWindow("seojin", memory({ "lp-day-window:seojin": '{"start":20,"end":3}' })),
     ).toEqual({ start: 6, end: 23 });
     expect(loadWindow("me", memory({ "lp-profile": "{" }))).toEqual({ start: 6, end: 23 });
+  });
+  it("coerces a hand-edited half-hour window from storage to whole hours", () => {
+    expect(
+      loadWindow("seojin", memory({ "lp-day-window:seojin": '{"start":6.5,"end":22.5}' })),
+    ).toEqual({ start: 6, end: 23 });
+    expect(loadWindow("me", memory({ "lp-profile": '{"dayStart":7.5,"dayEnd":20}' }))).toEqual({
+      start: 7,
+      end: 20,
+    });
   });
   it("keeps demo students separate, each under its own key", () => {
     const store = memory();

@@ -20,6 +20,11 @@ export function timeLabel(hour: number): string {
   return `${((h + 11) % 12) + 1}:${minutes} ${h >= 12 ? "PM" : "AM"}`;
 }
 
+/** End-of-day label: 24 reads "12:00 AM (midnight)" so it is not mistaken for the start of the day. */
+export function endLabel(hour: number): string {
+  return hour === 24 ? "12:00 AM (midnight)" : timeLabel(hour);
+}
+
 /** Selectable start/end hours (whole hours). Options that would break the rules are disabled. */
 export function windowOptions(window: DayWindow) {
   const hours = (from: number, to: number) =>

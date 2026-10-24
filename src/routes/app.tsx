@@ -196,7 +196,7 @@ function Scheduler({ s, onCalendar, onChange, win, onWindow }: { s: Student; onC
         </section>
         <section className="rounded-xl border bg-card p-4">
           <h2 className="font-semibold">This week's time</h2>
-          <p className="font-mono text-xs text-muted-foreground" title={outside ? `${outside}h outside your day (${timeLabel(win.end)} to ${timeLabel(win.start)}) isn't counted.` : "Your day covers all 24 hours."}>{weekTotal}h in window</p>
+          <p className="font-mono text-xs text-muted-foreground" title={outside ? `${outside}h outside your day (${timeLabel(win.end)} to ${timeLabel(win.start)}) isn't counted.` : "Your day covers all 24 hours."}>{weekTotal}h in your day</p>
           <div className="mt-3 space-y-3">
             {rows.map((row) => (
               <div key={row.label} title={row.note}>
