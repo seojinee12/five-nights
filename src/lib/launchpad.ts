@@ -9,6 +9,8 @@ export interface CalEvent {
   end: number;
   title: string;
   kind: "class" | "task" | "life";
+  /** Fixed blocks such as meals: they occupy time but are never offered up as time to reallocate. */
+  fixed?: boolean;
 }
 
 export interface CheckItem {
@@ -243,6 +245,7 @@ function seojinLunch(): CalEvent[] {
     end: 15,
     title: "Lunch",
     kind: "life" as const,
+    fixed: true,
   }));
 }
 

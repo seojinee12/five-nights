@@ -197,7 +197,10 @@ function subtract(
  */
 export function timeUse(events: CalEvent[], gaps: Gap[]) {
   const work = merged(events.filter((event) => event.kind !== "life"));
-  const life = subtract(merged(events.filter((event) => event.kind === "life")), work);
+  const life = subtract(
+    merged(events.filter((event) => event.kind === "life" && !event.fixed)),
+    work,
+  );
   const gapHours = (type: Gap["type"]) =>
     gaps
       .filter((gap) => gap.type === type)

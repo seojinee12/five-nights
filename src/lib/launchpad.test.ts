@@ -47,13 +47,25 @@ describe("launchpad rules", () => {
           );
       }
     });
-    it("is not free time, and adds no study or class hours", () => {
-      const without = SEOJIN.events.filter((e) => e.title !== "Lunch");
+    it("is marked fixed", () => {
+      expect(lunch.every((e) => e.fixed === true)).toBe(true);
+    });
+    it("occupies its hour: no free gap covers 2 to 3 PM", () => {
       const gaps = findGaps(SEOJIN.events, SEOJIN.status);
-      expect(gaps.some((g) => g.type === "free" && g.start < 15 && g.end > 14)).toBe(false);
-      expect(timeUse(SEOJIN.events, gaps).allocated).toBe(
-        timeUse(without, findGaps(without, SEOJIN.status)).allocated,
-      );
+      expect(gaps.some((g) => g.start < 15 && g.end > 14)).toBe(false);
+    });
+    it("adds no allocated or reallocate hours, and only takes from open time", () => {
+      const without = SEOJIN.events.filter((e) => e.title !== "Lunch");
+      const before = timeUse(without, findGaps(without, SEOJIN.status));
+      const after = timeUse(SEOJIN.events, findGaps(SEOJIN.events, SEOJIN.status));
+      expect(after.allocated).toBe(before.allocated);
+      expect(after.reallocate).toBe(before.reallocate);
+      expect(after.recompensate).toBeLessThan(before.recompensate);
+    });
+    it("a fixed life event is skipped by reallocate while a plain one still counts", () => {
+      const life = { day: 0, start: 14, end: 15, title: "x", kind: "life" as const };
+      expect(timeUse([{ ...life, fixed: true }], []).reallocate).toBe(0);
+      expect(timeUse([life], []).reallocate).toBe(1);
     });
     it("leaves the other students without a Lunch event", () => {
       for (const s of STUDENTS.filter((x) => x.id !== "seojin"))
