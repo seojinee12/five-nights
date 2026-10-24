@@ -506,7 +506,7 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
   eventsRef.current = s.events;
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.`, choices: defaultChips() }]), [s.id]);
   useEffect(() => {
     if (!note || seenNote.current === note.id) return;
@@ -514,8 +514,10 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
     setMsgs((current) => [...current, { me: false, text: note.text, choices: defaultChips(note.patch !== null) }]);
     setPending(note.patch);
   }, [note]);
+  // Scroll the list itself: scrollIntoView would also scroll the window to the panel on narrow screens.
   useEffect(() => {
-    endRef.current?.scrollIntoView?.({ block: "end" });
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [msgs]);
   // Typed text and chip clicks both come through here, so a chip says exactly what its label says.
   const send = (raw: string, fromChip = false) => {
@@ -577,7 +579,7 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
         <b className="text-sm">Mentor</b>
         <span className="ml-auto rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground">Grok</span>
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-3 text-sm">
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3 text-sm">
         {msgs.map((m, i) => (
           <div key={i} className={m.me ? "ml-8 rounded-lg bg-primary p-2.5 text-primary-foreground" : "mr-4"}>
             {m.text}
@@ -600,7 +602,6 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
             ))}
           </div>
         )}
-        <div ref={endRef} />
       </div>
       <div className="flex gap-2 border-t p-3">
         <input ref={fileRef} hidden type="file" accept=".pdf,.txt,.md,application/pdf,text/plain" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
