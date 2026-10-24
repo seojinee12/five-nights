@@ -524,7 +524,8 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
     const { message, route } = routeMessage(raw, s, pending !== null, fromChip);
     if (route.kind === "ignore") return;
     // After a chip click, keyboard focus goes back to the text box ("Something else" only does that).
-    if (fromChip) inputRef.current?.focus();
+    // preventScroll: on a narrow screen focusing would otherwise scroll the window to the panel.
+    if (fromChip) inputRef.current?.focus({ preventScroll: true });
     if (route.kind === "focus") return;
     if (!fromChip) setText("");
     setMsgs((current) => [...current, { me: true, text: message }]);
