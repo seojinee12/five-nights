@@ -6,6 +6,11 @@ import { sortTasks } from "./schedule";
 
 export const MAX_CHOICES = 4;
 export const MAX_CHOICE_LENGTH = 40;
+/** Safety cap on the full text a chip sends; the shown label is cut to MAX_CHOICE_LENGTH. */
+export const MAX_CHOICE_TEXT = 200;
+
+/** A quick reply: `label` is what the chip shows (at most 40 characters), `text` is what it sends. */
+export type Chip = { label: string; text: string };
 
 export const AHEAD_CHIP = "I'm ahead of schedule";
 export const BEHIND_CHIP = "I'm behind the schedule";
@@ -17,24 +22,39 @@ const NO_CHIP = "No, leave it";
 const POSTPONE_PREFIX = "Postpone: ";
 
 /**
- * Cleans the `choices` a model returned: strings only, whitespace collapsed and trimmed,
- * blanks dropped, labels over 40 characters cut with an ellipsis, duplicates (ignoring case)
- * dropped, then at most 4 kept.
+ * Cleans a list of quick replies: strings only, whitespace collapsed and trimmed, blanks dropped,
+ * duplicates (ignoring case, on the shown label) dropped, then at most 4 kept. Each chip shows its
+ * text cut to 40 characters with an ellipsis, and keeps the full text (up to 200) to send.
  */
-export function sanitizeChoices(input: unknown): string[] {
+export function sanitizeChips(input: unknown): Chip[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
-  const out: string[] = [];
+  const out: Chip[] = [];
   for (const item of input) {
     if (typeof item !== "string") continue;
-    const label = clip(item.replace(/\s+/g, " ").trim());
+    const text = item.replace(/\s+/g, " ").trim().slice(0, MAX_CHOICE_TEXT).trimEnd();
+    const label = clip(text);
     const key = label.toLowerCase();
     if (!label || seen.has(key)) continue;
     seen.add(key);
-    out.push(label);
+    out.push({ label, text });
     if (out.length === MAX_CHOICES) break;
   }
   return out;
+}
+
+/** The model contract: `choices` as plain labels, each cleaned like `sanitizeChips` (at most 40 characters). */
+export function sanitizeChoices(input: unknown): string[] {
+  return sanitizeChips(input).map((chip) => chip.label);
+}
+
+/** Chips from plain labels, each sending its own label unless `texts` (same order) says otherwise. */
+export function asChips(labels: string[], texts?: unknown): Chip[] {
+  const full = Array.isArray(texts) ? texts : [];
+  return labels.map((label, index) => {
+    const text = full[index];
+    return { label, text: typeof text === "string" && text.trim() ? text.trim() : label };
+  });
 }
 
 /** Shortens a label to the chip limit, ending in an ellipsis when it was cut. */
@@ -55,11 +75,20 @@ export function defaultChips(pending = false): string[] {
 /**
  * The model's own choices when it gave usable ones, otherwise `fallback`, which is empty unless
  * the turn is terminal-like or a change waits (see `defaultChips`). A free-text reply with no
- * choices therefore shows no chips.
+ * choices therefore shows no chips. Server side, from the raw model output.
  */
-export function replyChips(raw: unknown, fallback: string[] = []): string[] {
-  const choices = sanitizeChoices(raw);
-  return choices.length ? choices : fallback;
+export function replyChips(raw: unknown, fallback: string[] = []): Chip[] {
+  const chips = sanitizeChips(raw);
+  return chips.length ? chips : asChips(fallback);
+}
+
+/** Client side: the chips for a turn the server returned (`choices` labels, optional `choiceTexts`). */
+export function turnChips(
+  turn: { choices?: unknown; choiceTexts?: unknown },
+  fallback: string[] = [],
+): Chip[] {
+  const labels = sanitizeChoices(turn.choices);
+  return labels.length ? asChips(labels, turn.choiceTexts) : asChips(fallback);
 }
 
 const openTasks = (student: Student): Task[] =>
@@ -68,7 +97,7 @@ const openTasks = (student: Student): Task[] =>
 const mentions = (text: string, code: string) => text.toLowerCase().includes(code.toLowerCase());
 
 /** Up to three goals drawn from the student's current work, then "Something else". */
-export function aheadChips(student: Student): string[] {
+export function aheadChips(student: Student): Chip[] {
   const labels: string[] = [];
   const task = openTasks(student).find((item) => item.category !== "fun");
   if (task) labels.push(`Get ahead on ${task.title}`);
@@ -79,10 +108,7 @@ export function aheadChips(student: Student): string[] {
   const goals = [...(student.goals ?? []), ...student.courses.flatMap((item) => item.goals ?? [])];
   const goal = goals.find((item) => item.horizon === "short") ?? goals[0];
   if (goal) labels.push(`Push goal: ${goal.title}`);
-  return sanitizeChoices([
-    ...labels.map((label) => clip(label)).slice(0, MAX_CHOICES - 1),
-    OTHER_CHIP,
-  ]);
+  return sanitizeChips([...labels.slice(0, MAX_CHOICES - 1), OTHER_CHIP]);
 }
 
 /** The lowest-priority open tasks that can be moved to next week, lowest first. */
@@ -99,11 +125,11 @@ export function postponable(student: Student): Task[] {
 }
 
 /** Up to two postpone chips for the student's lowest-priority work, a reprioritize chip, "Something else". */
-export function behindChips(student: Student): string[] {
+export function behindChips(student: Student): Chip[] {
   const postpone = postponable(student)
     .slice(0, 2)
     .map((task) => `${POSTPONE_PREFIX}${task.title}`);
-  return sanitizeChoices([...postpone, REPRIORITIZE_CHIP, OTHER_CHIP]);
+  return sanitizeChips([...postpone, REPRIORITIZE_CHIP, OTHER_CHIP]);
 }
 
 export type ChipPlan =
@@ -116,14 +142,14 @@ export type ChipPlan =
    * just chose (status or one postponed task), applied right away with Undo; `note` is its
    * one-line confirmation and `reply` the mentor's next question with its follow-up `choices`.
    */
-  | { kind: "local"; patch: Patch | null; note: string | null; reply: string; choices: string[] };
+  | { kind: "local"; patch: Patch | null; note: string | null; reply: string; choices: Chip[] };
 
 export type SendRoute = ChipPlan | { kind: "ignore" } | { kind: "apply" } | { kind: "decline" };
 
 /**
  * What happens when the panel sends `raw`, whether typed or from a chip. The message that shows
  * up as the user's bubble (and goes to the mentor) is the trimmed text itself, so a chip says
- * exactly its label. A waiting change is answered first (yes applies it, no drops it).
+ * its full text, even when its label is cut. A waiting change is answered first (yes applies it, no drops it).
  */
 export function routeMessage(
   raw: string,
@@ -174,7 +200,7 @@ export function resolveChip(label: string, student: Student, fromChip = false): 
       patch: null,
       note: null,
       reply: "What changed? Tell me the day, the time and what's different.",
-      choices: ["Add an event", "Add a task", OTHER_CHIP],
+      choices: sanitizeChips(["Add an event", "Add a task", OTHER_CHIP]),
     };
   }
   const postpone = postponable(student).find(

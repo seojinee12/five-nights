@@ -9,7 +9,7 @@ import {
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
-import { defaultChips, replyChips, routeMessage } from "@/lib/mentorChips";
+import { asChips, defaultChips, routeMessage, turnChips, type Chip } from "@/lib/mentorChips";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunityList } from "@/components/OpportunityList";
@@ -494,7 +494,7 @@ function GoalColumn({ title, items, onEdit, onAdd }: { title: string; items: Rem
   );
 }
 
-type Msg = { me: boolean; text: string; undoId?: number | undefined; choices?: string[] };
+type Msg = { me: boolean; text: string; undoId?: number | undefined; choices?: Chip[] };
 
 function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Student; note: { id: number; text: string; patch: Patch | null } | null; onApply: (patch: Patch) => void; onApplyNow: (patch: Patch) => number; onUndo: (id: number) => boolean; onFile: (file: File) => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -507,11 +507,11 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.`, choices: defaultChips() }]), [s.id]);
+  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.`, choices: asChips(defaultChips()) }]), [s.id]);
   useEffect(() => {
     if (!note || seenNote.current === note.id) return;
     seenNote.current = note.id;
-    setMsgs((current) => [...current, { me: false, text: note.text, choices: defaultChips(note.patch !== null) }]);
+    setMsgs((current) => [...current, { me: false, text: note.text, choices: asChips(defaultChips(note.patch !== null)) }]);
     setPending(note.patch);
   }, [note]);
   // Scroll the list itself: scrollIntoView would also scroll the window to the panel on narrow screens.
@@ -531,12 +531,12 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
     if (route.kind === "apply" && pending) {
       onApply(pending);
       setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change.", choices: defaultChips() }]);
+      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change.", choices: asChips(defaultChips()) }]);
       return;
     }
     if (route.kind === "decline") {
       setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Left the week as it is.", choices: defaultChips() }]);
+      setMsgs((current) => [...current, { me: false, text: "Left the week as it is.", choices: asChips(defaultChips()) }]);
       return;
     }
     if (route.kind === "local") {
@@ -555,18 +555,18 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
       if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);
         setPending(null);
-        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId, choices: replyChips(turn.choices, defaultChips()) }]);
+        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId, choices: turnChips(turn, defaultChips()) }]);
         return;
       }
       setPending(turn.patch);
-      setMsgs((current) => [...current, { me: false, text: turn.reply, choices: replyChips(turn.choices, turn.patch !== null ? defaultChips(true) : []) }]);
-    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: defaultChips() }]));
+      setMsgs((current) => [...current, { me: false, text: turn.reply, choices: turnChips(turn, turn.patch !== null ? defaultChips(true) : []) }]);
+    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: asChips(defaultChips()) }]));
   };
   const undo = (index: number, id: number) => {
     const ok = onUndo(id);
     setMsgs((current) => [
       ...current.map((m, i) => (i === index ? { ...m, undoId: undefined } : m)),
-      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone.", choices: defaultChips() },
+      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone.", choices: asChips(defaultChips()) },
     ]);
   };
   // Only the latest assistant turn offers chips; any later message (even a typed one) retires them.
@@ -594,14 +594,16 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
         ))}
         {quick.length > 0 && (
           <div role="group" aria-label="Quick replies" className="flex flex-wrap gap-1.5">
-            {quick.map((label) => (
+            {quick.map((chip) => (
               <button
-                key={label}
+                key={chip.label}
                 type="button"
-                onClick={() => send(label, true)}
+                title={chip.text}
+                aria-label={chip.text}
+                onClick={() => send(chip.text, true)}
                 className="max-w-full rounded-full border bg-background px-2.5 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {label}
+                {chip.label}
               </button>
             ))}
           </div>

@@ -6,7 +6,8 @@ import { defaultChips, replyChips } from "./mentorChips";
 import { sanitizePatch, type Patch } from "./patch";
 import { classifyPatch, type PatchSize } from "./patchSize";
 
-export type Turn = { reply: string; patch: Patch | null; size?: PatchSize; choices?: string[] };
+/** `choices` are the chip labels (at most 40 characters); `choiceTexts` is the full text per label, set only when a label was cut. */
+export type Turn = { reply: string; patch: Patch | null; size?: PatchSize; choices?: string[]; choiceTexts?: string[] };
 export type Opportunity = { name: string; sub?: string; what: string; url: string };
 export type OpportunityLists = { research: Opportunity[]; projects: Opportunity[] };
 
@@ -208,8 +209,11 @@ function turnOf(
   const patch = sanitizePatch(rawPatch);
   const size = patch && allowSmall ? classifyPatch(rawPatch, events) : "big";
   // The model's quick replies when it gave usable ones; yes/no while a change waits; otherwise none.
-  const choices = replyChips(rawChoices, patch !== null && size !== "small" ? defaultChips(true) : []);
-  return { reply: size === "small" ? reply : withAsk(reply, patch), patch, size, choices };
+  const chips = replyChips(rawChoices, patch !== null && size !== "small" ? defaultChips(true) : []);
+  const choices = chips.map((chip) => chip.label);
+  const turn: Turn = { reply: size === "small" ? reply : withAsk(reply, patch), patch, size, choices };
+  if (chips.some((chip) => chip.text !== chip.label)) turn.choiceTexts = chips.map((chip) => chip.text);
+  return turn;
 }
 
 function withAsk(reply: string, patch: Patch | null): string {

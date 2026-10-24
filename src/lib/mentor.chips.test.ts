@@ -102,6 +102,24 @@ describe("chatWithMentor choices (network mocked)", () => {
     expect(JSON.stringify(body.contents)).toContain("choices");
   });
 
+  it("carries the full text of a model choice that was cut for display", async () => {
+    const { chatWithMentor } = await load({ gemini: "test-key" });
+    const long = "Move my calculus problem set to Thursday evening after the study group";
+    fetchMock.mockResolvedValueOnce(
+      json(candidate({ reply: "Which?", patch: null, choices: [long, "Short"] })),
+    );
+    const turn = await chatWithMentor({ model: "Gemini", message: "hi", student });
+    expect(turn.choices?.[0]).toHaveLength(40);
+    expect(turn.choices?.[1]).toBe("Short");
+    expect(turn.choiceTexts).toEqual([long, "Short"]);
+    fetchMock.mockResolvedValueOnce(
+      json(candidate({ reply: "Which?", patch: null, choices: ["A"] })),
+    );
+    expect(
+      (await chatWithMentor({ model: "Gemini", message: "hi", student })).choiceTexts,
+    ).toBeUndefined();
+  });
+
   it("shows no chips when the model returns none, and yes/no while a change waits", async () => {
     const { chatWithMentor } = await load({ gemini: "test-key" });
     fetchMock.mockResolvedValueOnce(json(candidate({ reply: "Okay.", patch: null })));
