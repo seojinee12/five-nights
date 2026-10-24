@@ -14,6 +14,7 @@ import { sourceOpportunities } from "@/lib/mentor.functions";
 import { Route as AppRoute } from "@/routes/app";
 
 vi.mock("@/lib/mentor.functions", () => ({
+  findMoreOpportunities: vi.fn(async () => null),
   mentorChat: vi.fn(),
   readMaterial: vi.fn(),
   sourceOpportunities: vi.fn(async () => null),
