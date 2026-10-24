@@ -8,6 +8,8 @@ import {
 import { parseCalendar } from "@/lib/calendar";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
+import { rankSourced, profileFromStudent } from "@/lib/opportunities";
+import { OpportunityList } from "@/components/OpportunityList";
 
 export const Route = createFileRoute("/app")({
   validateSearch: (s: Record<string, unknown>) => ({ u: (s['u'] as string) || "seojin" }),
@@ -112,7 +114,7 @@ function AppPage() {
           {tab === "Scheduler" && <Scheduler s={student} onCalendar={() => calRef.current?.click()} onChange={edit} />}
           {tab === "Working on" && <WorkingOn s={student} onChange={edit} />}
           {tab === "Academics" && <Academics s={student} onSyllabus={() => sylRef.current?.click()} onChange={edit} />}
-          {tab === "Opportunities" && <Opportunities />}
+          {tab === "Opportunities" && <Opportunities s={student} />}
           {tab === "Long-term" && <LongTerm s={student} onChange={edit} />}
         </main>
         <Assistant s={student} note={note} onApply={(patch) => setStudent((current) => current ? applyPatch(current, patch) : current)} onFile={(file) => void onSyllabusFile(file)} />
@@ -343,34 +345,41 @@ function CourseBlock({ course, onChange }: { course: Course; onChange: (course: 
   );
 }
 
-function Opportunities() {
+function Opportunities({ s }: { s: Student }) {
   const [research, setResearch] = useState(RESEARCH);
   const [projects, setProjects] = useState(PROJECTS);
   useEffect(() => {
-    sourceOpportunities().then((lists) => {
-      if (!lists) return;
-      if (lists.research.length) setResearch(lists.research.map((item) => ({ name: item.name, pi: item.sub ?? "", what: item.what, url: item.url })));
-      if (lists.projects.length) setProjects(lists.projects);
-    }).catch(() => undefined);
+    sourceOpportunities()
+      .then((lists) => {
+        if (!lists) return;
+        if (lists.research.length)
+          setResearch(
+            lists.research.map((item) => ({
+              name: item.name,
+              pi: item.sub ?? "",
+              what: item.what,
+              url: item.url,
+            })),
+          );
+        if (lists.projects.length) setProjects(lists.projects);
+      })
+      .catch(() => undefined);
   }, []);
-  const Card = ({ name, sub, what, url }: { name: string; sub?: string; what: string; url: string }) => (
-    <a href={url} target="_blank" rel="noreferrer" className="group block rounded-lg border bg-card p-4 hover:border-accent">
-      <div className="flex items-start justify-between gap-2"><b>{name}</b><ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-accent" /></div>
-      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
-      <p className="mt-2 text-sm">{what}</p>
-      <div className="mt-2 truncate font-mono text-[11px] text-accent">{url}</div>
-    </a>
+  const ranked = useMemo(
+    () =>
+      rankSourced(
+        {
+          research: research.map((r) => ({ name: r.name, sub: r.pi, what: r.what, url: r.url })),
+          projects,
+        },
+        profileFromStudent(s),
+      ),
+    [research, projects, s],
   );
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="mb-3 font-semibold">Research labs at UCSD</h2>
-        <div className="grid gap-3 md:grid-cols-2">{research.map((r) => <Card key={r.name} name={r.name} sub={r.pi} what={r.what} url={r.url} />)}</div>
-      </div>
-      <div>
-        <h2 className="mb-3 font-semibold">Project teams open to beginners</h2>
-        <div className="grid gap-3 md:grid-cols-2">{projects.map((r) => <Card key={r.name} {...r} />)}</div>
-      </div>
+    <div className="space-y-3">
+      <h2 className="font-semibold">Best fits for you</h2>
+      <OpportunityList items={ranked} />
     </div>
   );
 }
