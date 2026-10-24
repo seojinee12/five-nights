@@ -30,7 +30,7 @@ export const mentorChat = createServerFn({ method: "POST" })
       return await chatWithMentor(data);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Mentor failed";
-      return { reply: `Gemini could not finish that. ${message} Nothing was changed.`, patch: null };
+      return { reply: `The assistant could not finish that. ${message} Nothing was changed.`, patch: null };
     }
   });
 

@@ -109,8 +109,8 @@ async function geminiTurnParts(parts: Record<string, unknown>[], allowSmall: boo
   const result = await geminiText(parts, false);
   if (!result.text) {
     const reply = result.limited
-      ? "Gemini is rate-limited right now. Nothing was changed."
-      : "Gemini could not finish that. Nothing was changed.";
+      ? "The assistant is rate-limited right now. Nothing was changed."
+      : "The assistant could not finish that. Nothing was changed.";
     return { reply, patch: null };
   }
   const parsed = jsonFrom(result.text) as { reply?: unknown; patch?: unknown } | null;
