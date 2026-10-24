@@ -166,9 +166,8 @@ function Scheduler({ s, onCalendar, onChange }: { s: Student; onCalendar: () => 
           <h2 className="font-semibold">This week's time</h2>
           <div className="mt-3 space-y-3">
             {rows.map((row) => (
-              <div key={row.label}>
+              <div key={row.label} title={row.note}>
                 <div className="flex justify-between gap-3 text-sm"><span>{row.label}</span><span className="font-mono text-xs">{row.hours.toFixed(1)}h</span></div>
-                <p className="text-xs text-muted-foreground">{row.note}</p>
                 <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-accent" style={{ width: `${Math.min(100, (row.hours / max) * 100)}%` }} /></div>
               </div>
             ))}
@@ -285,8 +284,12 @@ function WeekView({ s, gaps }: { s: Student; gaps: ReturnType<typeof findGaps> }
     <section className="rounded-xl border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs">
         <h2 className="mr-auto text-base font-semibold">This week</h2>
-        <Legend c="bg-class" l="Class" /><Legend c="bg-task" l="Task" /><Legend c="bg-life" l="Life" />
-        <Legend c="hatch-free" l="Free" /><Legend c="bg-pseudo" l="Pseudo-free" /><Legend c="hatch-lazy" l="Unused (lazy)" />
+        <Legend c="bg-class" l="Class" />
+        <Legend c="bg-task" l="Task" />
+        <Legend c="bg-life" l="Life" />
+        <Legend c="hatch-free" l="Free" />
+        {gaps.some((g) => g.type === "pseudo") && <Legend c="bg-pseudo" l="Pseudo-free" />}
+        {gaps.some((g) => g.type === "lazy") && <Legend c="hatch-lazy" l="Unused" />}
       </div>
       <div className="grid grid-cols-[36px_repeat(7,1fr)] gap-1">
         <div />
