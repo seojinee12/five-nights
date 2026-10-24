@@ -78,6 +78,37 @@ const GOAL_TYPE_POINTS = 15;
 const MAJOR_POINTS = 15;
 const LEVEL_POINTS = 10;
 
+/**
+ * Plain-language copy for how the score works, shown in the Opportunities tab. Built from the
+ * point constants above so the numbers shown to students can't drift from the ranking.
+ */
+export const SCORING_EXPLAINER = {
+  short: `Score out of 100: topic match ${TOPIC_POINTS} · year ${YEAR_POINTS} · kind you want ${GOAL_TYPE_POINTS} · major ${MAJOR_POINTS} · beginner fit ${LEVEL_POINTS}. Lowered if your major or year doesn't fit or applications are closed.`,
+  intro: "Each opportunity gets a score from 0 to 100, highest first. It adds up:",
+  factors: [
+    {
+      label: "Topic match",
+      points: TOPIC_POINTS,
+      text: "how well its topics match your interests, goals, skills, major and coursework.",
+    },
+    { label: "Year fit", points: YEAR_POINTS, text: "whether it suits your year." },
+    {
+      label: "Kind you want",
+      points: GOAL_TYPE_POINTS,
+      text: "whether its type (research, internship, project team...) is what your goals ask for.",
+    },
+    { label: "Major fit", points: MAJOR_POINTS, text: "whether it fits your major." },
+    {
+      label: "Beginner fit",
+      points: LEVEL_POINTS,
+      text: "early-year students score higher on beginner-friendly ones.",
+    },
+  ],
+  reductions:
+    "The score is reduced for a major mismatch, a year outside its range, or closed applications.",
+  local: "It runs on your device and doesn't need an AI call.",
+} as const;
+
 type Source = "interests" | "goals" | "skills" | "major" | "context";
 const SOURCE_WEIGHT: Record<Source, number> = {
   interests: 1,

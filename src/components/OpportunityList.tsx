@@ -1,4 +1,58 @@
-import type { RankedOpportunity } from "@/lib/opportunities";
+import { Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
+
+const TIP_CLASS = "max-w-xs border bg-popover text-popover-foreground shadow-md";
+const FOCUS_CLASS =
+  "rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** The "Best fits for you" heading, an info icon with the short scoring tip, and the fuller description. */
+export function OpportunitiesHeading() {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5">
+          <h2 className="font-semibold">Best fits for you</h2>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="How is this scored?"
+                className={`inline-flex text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
+              >
+                <Info className="size-3.5" aria-hidden="true" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className={TIP_CLASS}>{SCORING_EXPLAINER.short}</TooltipContent>
+          </Tooltip>
+        </div>
+        <details className="group">
+          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+            How is this scored?
+          </summary>
+          <div
+            data-testid="scoring-explainer"
+            className="mt-2 space-y-2 rounded-xl border bg-card p-4 text-xs text-muted-foreground"
+          >
+            <p>{SCORING_EXPLAINER.intro}</p>
+            <ul className="space-y-1">
+              {SCORING_EXPLAINER.factors.map((f) => (
+                <li key={f.label}>
+                  <span className="font-medium text-foreground">
+                    {f.label} (up to {f.points}):
+                  </span>{" "}
+                  {f.text}
+                </li>
+              ))}
+            </ul>
+            <p>{SCORING_EXPLAINER.reductions}</p>
+            <p>{SCORING_EXPLAINER.local}</p>
+          </div>
+        </details>
+      </div>
+    </TooltipProvider>
+  );
+}
 
 function OpportunityCard({ item }: { item: RankedOpportunity }) {
   return (
@@ -13,7 +67,17 @@ function OpportunityCard({ item }: { item: RankedOpportunity }) {
         >
           {item.name}
         </a>
-        <span className="shrink-0 text-xs text-muted-foreground">{item.score}/100</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className={`shrink-0 text-xs text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
+            >
+              {item.score}/100
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className={TIP_CLASS}>{SCORING_EXPLAINER.short}</TooltipContent>
+        </Tooltip>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{item.why}</p>
     </li>
@@ -30,24 +94,26 @@ export function OpportunityList({
 }) {
   const rest = items.slice(visible);
   return (
-    <div className="space-y-3">
-      <ul className="space-y-3">
-        {items.slice(0, visible).map((item) => (
-          <OpportunityCard key={item.url} item={item} />
-        ))}
-      </ul>
-      {rest.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-            See {rest.length} more
-          </summary>
-          <ul className="mt-3 space-y-3">
-            {rest.map((item) => (
-              <OpportunityCard key={item.url} item={item} />
-            ))}
-          </ul>
-        </details>
-      )}
-    </div>
+    <TooltipProvider delayDuration={150}>
+      <div className="space-y-3">
+        <ul className="space-y-3">
+          {items.slice(0, visible).map((item) => (
+            <OpportunityCard key={item.url} item={item} />
+          ))}
+        </ul>
+        {rest.length > 0 && (
+          <details className="group">
+            <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+              See {rest.length} more
+            </summary>
+            <ul className="mt-3 space-y-3">
+              {rest.map((item) => (
+                <OpportunityCard key={item.url} item={item} />
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </TooltipProvider>
   );
 }

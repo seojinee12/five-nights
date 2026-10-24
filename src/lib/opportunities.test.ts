@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PROJECTS, RESEARCH } from "./launchpad";
 import {
+  SCORING_EXPLAINER,
   inferTags,
   inferType,
   parseYear,
@@ -373,5 +374,28 @@ describe("resume privacy", () => {
       score(without, "Engineers for Exploration"),
     );
     for (const r of withResume) expect(r.why).not.toMatch(/resume/i);
+  });
+});
+
+describe("SCORING_EXPLAINER", () => {
+  const full = [
+    SCORING_EXPLAINER.intro,
+    ...SCORING_EXPLAINER.factors.map((f) => `${f.label} (up to ${f.points}): ${f.text}`),
+    SCORING_EXPLAINER.reductions,
+    SCORING_EXPLAINER.local,
+  ].join(" ");
+
+  it("mentions every weight, and the weights add up to 100", () => {
+    const points = SCORING_EXPLAINER.factors.map((f) => f.points);
+    expect(points).toEqual([40, 20, 15, 15, 10]);
+    expect(points.reduce((a, b) => a + b, 0)).toBe(100);
+    for (const n of points) {
+      expect(SCORING_EXPLAINER.short).toContain(String(n));
+      expect(full).toContain(String(n));
+    }
+  });
+
+  it("keeps the copy free of provider names and the resume", () => {
+    expect(`${SCORING_EXPLAINER.short} ${full}`).not.toMatch(/gemini|openai|resume/i);
   });
 });

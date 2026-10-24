@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { OpportunityList } from "./OpportunityList";
-import type { RankedOpportunity } from "@/lib/opportunities";
+import { OpportunitiesHeading, OpportunityList } from "./OpportunityList";
+import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
 
 const item = (n: number): RankedOpportunity => ({
   name: `Opportunity ${n}`,
@@ -37,5 +37,28 @@ describe("OpportunityList", () => {
       expect(document.querySelector("details")).toBeNull();
       unmount();
     }
+  });
+
+  it("gives each score a focusable tooltip trigger", () => {
+    render(<OpportunityList items={[1, 2].map(item)} />);
+    const score = screen.getByRole("button", { name: "99/100" });
+    score.focus();
+    expect(score).toHaveFocus();
+  });
+});
+
+describe("OpportunitiesHeading", () => {
+  it("has a labelled, focusable info icon and a scoring disclosure that is closed by default", () => {
+    render(<OpportunitiesHeading />);
+    expect(screen.getByRole("heading", { name: "Best fits for you" })).toBeInTheDocument();
+    const icon = screen.getByRole("button", { name: "How is this scored?" });
+    icon.focus();
+    expect(icon).toHaveFocus();
+    const details = document.querySelector("details")!;
+    expect(details).not.toHaveAttribute("open");
+    expect(within(details).getByText("How is this scored?")).toBeInTheDocument();
+    const text = screen.getByTestId("scoring-explainer").textContent ?? "";
+    for (const f of SCORING_EXPLAINER.factors) expect(text).toContain(`up to ${f.points}`);
+    expect(text).not.toMatch(/gemini|resume/i);
   });
 });

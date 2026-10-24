@@ -11,7 +11,7 @@ import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
-import { OpportunityList } from "@/components/OpportunityList";
+import { OpportunitiesHeading, OpportunityList } from "@/components/OpportunityList";
 
 export const Route = createFileRoute("/app")({
   validateSearch: (s: Record<string, unknown>) => ({ u: (s['u'] as string) || "seojin" }),
@@ -448,7 +448,7 @@ function Opportunities({ s }: { s: Student }) {
   );
   return (
     <div className="space-y-3">
-      <h2 className="font-semibold">Best fits for you</h2>
+      <OpportunitiesHeading />
       <OpportunityList items={ranked} />
     </div>
   );
