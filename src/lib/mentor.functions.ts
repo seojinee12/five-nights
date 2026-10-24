@@ -1,4 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { CalendarRequestSchema } from "./calendar-gemini";
+import type { CalEvent } from "./launchpad";
 import type { Turn, OpportunityLists } from "./mentor.server";
 
 type ChatBody = {
@@ -37,6 +39,18 @@ export const readMaterial = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<Turn> => {
     const { readMaterial: read } = await import("./mentor.server");
     return read(data);
+  });
+
+/** Gemini reads an uploaded calendar. events is null when it could not be used; the client then falls back to the plain parser. */
+export const parseCalendarWithGemini = createServerFn({ method: "POST" })
+  .validator((data: unknown) => CalendarRequestSchema.parse(data))
+  .handler(async ({ data }): Promise<{ events: CalEvent[] | null }> => {
+    try {
+      const { calendarEventsFromGemini } = await import("./mentor.server");
+      return { events: await calendarEventsFromGemini(data) };
+    } catch {
+      return { events: null };
+    }
   });
 
 export const sourceOpportunities = createServerFn({ method: "GET" }).handler(async (): Promise<OpportunityLists | null> => {
