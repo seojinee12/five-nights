@@ -443,6 +443,9 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Patch | null>(null);
   const seenNote = useRef(0);
+  // Live events, so the overlap check below sees the schedule as it is when the reply lands.
+  const eventsRef = useRef(s.events);
+  eventsRef.current = s.events;
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.` }]), [s.id]);
   useEffect(() => {
@@ -469,7 +472,7 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
     }
     const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
     void mentorChat({ data: { model: "Grok", message: raw, student: snapshot } }).then((turn) => {
-      if (turn.patch && turn.size === "small" && classifyPatch(turn.patch) === "small") {
+      if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);
         setPending(null);
         setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId }]);
