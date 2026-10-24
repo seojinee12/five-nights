@@ -247,7 +247,7 @@ export function timeUse(events: CalEvent[], gaps: Gap[], window: DayWindow = DEF
   );
   const life = subtract(
     merged(
-      events.filter((event) => event.kind === "life"),
+      events.filter((event) => event.kind === "life" && !event.fixed),
       window,
     ),
     work,
