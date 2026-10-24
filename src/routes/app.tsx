@@ -3,8 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Rocket, Upload, CalendarPlus, Send, AlertTriangle, ExternalLink, Check, Paperclip, Plus, Pin, MoreHorizontal, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  STUDENTS, SEOJIN, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
-  type Student, type Category, type Task, type Course, type Reminder,
+  STUDENTS, SEOJIN, sortTasks, findGaps, fmt, timeUse, weekHours, DEFAULT_WINDOW, RESEARCH, PROJECTS,
+  type DayWindow, type Student, type Category, type Task, type Course, type Reminder,
 } from "@/lib/launchpad";
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
@@ -12,6 +12,8 @@ import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunityList } from "@/components/OpportunityList";
+import { DayWindowControl } from "@/components/DayWindowControl";
+import { loadWindow, saveWindow, timeLabel } from "@/lib/dayWindow";
 
 export const Route = createFileRoute("/app")({
   validateSearch: (s: Record<string, unknown>) => ({ u: (s['u'] as string) || "seojin" }),
@@ -57,6 +59,10 @@ function AppPage() {
     setNote(null);
   }, [base]);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Scheduler");
+  const windowId = u === "me" ? "me" : base?.id ?? u;
+  const [dayWindow, setDayWindow] = useState<DayWindow>(DEFAULT_WINDOW);
+  useEffect(() => { setDayWindow(loadWindow(windowId, localStorage)); }, [windowId]);
+  const changeWindow = (next: DayWindow) => { setDayWindow(next); saveWindow(windowId, next, localStorage); };
   if (!student) return null;
 
   const tell = (text: string, patch: Patch | null) => setNote({ id: Date.now(), text, patch });
@@ -134,7 +140,7 @@ function AppPage() {
             <h1 className="text-3xl font-bold tracking-tight">Welcome, {student.name}</h1>
             <p className="text-sm text-muted-foreground">{student.year} · {student.major} · {student.school} — {student.statusNote}</p>
           </div>
-          {tab === "Scheduler" && <Scheduler s={student} onCalendar={() => calRef.current?.click()} onChange={edit} />}
+          {tab === "Scheduler" && <Scheduler s={student} onCalendar={() => calRef.current?.click()} onChange={edit} win={dayWindow} onWindow={changeWindow} />}
           {tab === "Working on" && <WorkingOn s={student} onChange={edit} />}
           {tab === "Academics" && <Academics s={student} onSyllabus={() => sylRef.current?.click()} onChange={edit} />}
           {tab === "Opportunities" && <Opportunities s={student} />}
@@ -152,12 +158,13 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function Scheduler({ s, onCalendar, onChange }: { s: Student; onCalendar: () => void; onChange: (fn: (current: Student) => Student) => void }) {
-  const gaps = useMemo(() => findGaps(s.events, s.status), [s]);
-  const use = timeUse(s.events, gaps);
+function Scheduler({ s, onCalendar, onChange, win, onWindow }: { s: Student; onCalendar: () => void; onChange: (fn: (current: Student) => Student) => void; win: DayWindow; onWindow: (next: DayWindow) => void }) {
+  const gaps = useMemo(() => findGaps(s.events, s.status, win), [s, win]);
+  const use = timeUse(s.events, gaps, win);
+  const weekTotal = weekHours(win);
+  const outside = 24 * 7 - weekTotal;
   const tasks = sortTasks(s.tasks, s.focus);
   const save = (task: Task) => onChange((current) => ({ ...current, tasks: current.tasks.map((item) => item.id === task.id ? task : item) }));
-  const max = Math.max(1, use.allocated, use.reallocate, use.recompensate);
   const rows = [
     { label: "Allocated toward your goal", hours: use.allocated, note: "Class and scheduled work already on this week." },
     { label: "Reallocate if you're off task", hours: use.reallocate, note: s.status === "behind" ? "Life plans and unused blocks you can move back to academics." : "Life time you could move if you fall behind." },
@@ -165,8 +172,9 @@ function Scheduler({ s, onCalendar, onChange }: { s: Student; onCalendar: () => 
   ];
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button onClick={onCalendar} className="flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-sm hover:bg-muted"><CalendarPlus className="h-4 w-4" />Import Google Calendar</button>
+        <DayWindowControl value={win} onChange={onWindow} />
       </div>
 
       {s.status === "behind" && (
@@ -176,7 +184,7 @@ function Scheduler({ s, onCalendar, onChange }: { s: Student; onCalendar: () => 
         </div>
       )}
 
-      <WeekView s={s} gaps={gaps} />
+      <WeekView s={s} gaps={gaps} win={win} />
 
       <div className="grid gap-5 md:grid-cols-2">
         <section className="rounded-xl border bg-card p-4">
@@ -188,11 +196,12 @@ function Scheduler({ s, onCalendar, onChange }: { s: Student; onCalendar: () => 
         </section>
         <section className="rounded-xl border bg-card p-4">
           <h2 className="font-semibold">This week's time</h2>
+          <p className="font-mono text-xs text-muted-foreground" title={outside ? `${outside}h outside your day (${timeLabel(win.end)} to ${timeLabel(win.start)}) isn't counted.` : "Your day covers all 24 hours."}>{weekTotal}h in window</p>
           <div className="mt-3 space-y-3">
             {rows.map((row) => (
               <div key={row.label} title={row.note}>
                 <div className="flex justify-between gap-3 text-sm"><span>{row.label}</span><span className="font-mono text-xs">{row.hours.toFixed(1)}h</span></div>
-                <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-accent" style={{ width: `${Math.min(100, (row.hours / max) * 100)}%` }} /></div>
+                <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-accent" style={{ width: `${Math.min(100, (row.hours / weekTotal) * 100)}%` }} /></div>
               </div>
             ))}
           </div>
@@ -300,10 +309,11 @@ function ItemList({ items, placeholder, onChange, onAdd, className = "ml-4 mt-2 
 
 const nid = () => `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
-function WeekView({ s, gaps }: { s: Student; gaps: ReturnType<typeof findGaps> }) {
+function WeekView({ s, gaps, win }: { s: Student; gaps: ReturnType<typeof findGaps>; win: DayWindow }) {
   const H = 26; // px per hour
-  const hours = Array.from({ length: DAY_END - DAY_START }, (_, i) => DAY_START + i);
-  const top = (h: number) => (h - DAY_START) * H;
+  const hours = Array.from({ length: Math.ceil(win.end - win.start) }, (_, i) => win.start + i);
+  const gridHeight = (win.end - win.start) * H;
+  const top = (h: number) => (h - win.start) * H;
   return (
     <section className="rounded-xl border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs">
@@ -318,20 +328,20 @@ function WeekView({ s, gaps }: { s: Student; gaps: ReturnType<typeof findGaps> }
       <div className="grid grid-cols-[36px_repeat(7,1fr)] gap-1">
         <div />
         {DAYS.map((d) => <div key={d} className="text-center font-mono text-xs text-muted-foreground">{d}</div>)}
-        <div className="relative" style={{ height: hours.length * H }}>
+        <div className="relative" style={{ height: gridHeight }}>
           {hours.map((h) => <div key={h} className="absolute right-1 font-mono text-[10px] text-muted-foreground" style={{ top: top(h) - 6 }}>{fmt(h)}</div>)}
         </div>
         {DAYS.map((_, d) => (
-          <div key={d} className="relative rounded-md bg-muted/50" style={{ height: hours.length * H }}>
+          <div key={d} className="relative rounded-md bg-muted/50" style={{ height: gridHeight }}>
             {gaps.filter((g) => g.day === d).map((g, i) => (
               <div key={i} title={`${g.type} ${fmt(g.start)}–${fmt(g.end)}`}
                 className={`absolute inset-x-0.5 rounded-sm ${g.type === "free" ? "hatch-free" : g.type === "lazy" ? "hatch-lazy" : "bg-pseudo"}`}
                 style={{ top: top(g.start), height: (g.end - g.start) * H }} />
             ))}
-            {s.events.filter((e) => e.day === d).map((e, i) => (
+            {s.events.filter((e) => e.day === d && e.end > win.start && e.start < win.end).map((e, i) => (
               <div key={i} title={`${e.title} ${fmt(e.start)}–${fmt(e.end)}`}
                 className={`absolute inset-x-0.5 overflow-hidden rounded-sm px-1 text-[10px] leading-tight text-primary-foreground ${e.kind === "class" ? "bg-class" : e.kind === "task" ? "bg-task" : "bg-life"}`}
-                style={{ top: top(e.start), height: Math.max(12, (e.end - e.start) * H - 1) }}>
+                style={{ top: top(Math.max(e.start, win.start)), height: Math.max(12, (Math.min(e.end, win.end) - Math.max(e.start, win.start)) * H - 1) }}>
                 <b>{e.title}</b>
               </div>
             ))}
