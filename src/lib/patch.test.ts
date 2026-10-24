@@ -15,4 +15,14 @@ describe("applyPatch", () => {
     expect(next.tasks.some((task) => task.title === "Problem Set 2")).toBe(true);
     expect(next.tasks.some((task) => task.title === "Date night")).toBe(true);
   });
+
+  it("keeps the previous state intact when an event is added, so Undo can restore it", () => {
+    const before = structuredClone(SEOJIN);
+    const event = { day: 6, start: 20, end: 21, title: "Call home", kind: "life" as const };
+    const next = applyPatch(SEOJIN, { addEvents: [event] });
+    expect(next.events).toHaveLength(SEOJIN.events.length + 1);
+    expect(next.events).toContainEqual(event);
+    expect(SEOJIN).toEqual(before);
+    expect(SEOJIN.events).not.toBe(next.events);
+  });
 });
