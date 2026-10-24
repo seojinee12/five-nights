@@ -53,6 +53,39 @@ export interface Task {
   subtasks?: CheckItem[];
 }
 
+/** A short-term aim or a longer-term goal on the student's own profile. */
+export interface StudentGoal extends CourseGoal {
+  category: Category;
+}
+
+export type OpportunityType = "research" | "internship" | "project-team";
+
+/** What the student wants from opportunities; the Opportunities tab can rank against it. */
+export interface StudentPreferences {
+  workStyle: string;
+  opportunityTypes: OpportunityType[];
+  location: string;
+  protectedTime: string;
+}
+
+export interface ResumeEntry {
+  title: string;
+  org?: string;
+  dates?: string;
+  bullets: string[];
+}
+
+/** Plain resume values. Demo resumes must use placeholders, never real contact details. */
+export interface Resume {
+  name: string;
+  contact: string;
+  education: ResumeEntry[];
+  coursework: string[];
+  projects: ResumeEntry[];
+  activities: ResumeEntry[];
+  skills: string[];
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -69,6 +102,14 @@ export interface Student {
   tasks: Task[];
   weeklyTargets: { label: string; hours: number; done: number }[];
   longTerm: Reminder[];
+  /** Optional profile fields. Students without them keep working. */
+  demoLabel?: string; // set on invented example students
+  interests?: string[];
+  skills?: string[];
+  freeHoursPerWeek?: number;
+  preferences?: StudentPreferences;
+  goals?: StudentGoal[]; // short and long horizon; monthly and yearly reminders stay in longTerm
+  resume?: Resume;
 }
 
 const ece = [
@@ -93,18 +134,101 @@ function classes(): CalEvent[] {
   return e;
 }
 
+/** Seojin's first-year courses: the shared class grid with ECE 17 dropped and the math and physics slots renamed. */
+const seojinCourses: Course[] = [
+  { code: "ECE 5", name: "Intro to Electrical & Computer Engineering", units: 4 },
+  {
+    code: "MATH 20A", name: "Calculus for Science & Engineering", units: 4,
+    subtasks: [
+      { id: "m20a", title: "Redo the last problem set" },
+      { id: "m20b", title: "Midterm practice set" },
+    ],
+    goals: [
+      { id: "m20s", title: "Ready for the Thursday midterm", horizon: "short" },
+      { id: "m20l", title: "Finish MATH 20A with an A", horizon: "long" },
+    ],
+  },
+  { code: "PHYS 2A", name: "Physics: Mechanics", units: 4 },
+];
+
+function seojinClasses(): CalEvent[] {
+  return classes()
+    .filter((e) => e.title !== "ECE 17")
+    .map((e) => ({ ...e, title: e.title.replace("MATH 20C", "MATH 20A").replace("PHYS 2B", "PHYS 2A") }));
+}
+
+/** EXAMPLE / DEMO profile data for the invented first-year student. Not a real person's record. */
+const seojinProfile: Pick<Student, "demoLabel" | "interests" | "skills" | "freeHoursPerWeek" | "preferences" | "goals" | "resume"> = {
+  demoLabel: "EXAMPLE / DEMO DATA: an invented first-year student. Not a real person's record.",
+  interests: ["Robotics and embedded systems", "Wearable and sensor hardware", "Undergraduate research"],
+  skills: ["C++ (intro level)", "Python (basic scripting)", "Circuit basics", "Arduino basics", "Git"],
+  freeHoursPerWeek: 22,
+  preferences: {
+    workStyle: "Short hands-on builds, 2 to 3 hour focus blocks, a study group once a week",
+    opportunityTypes: ["research", "internship", "project-team"],
+    location: "On campus at UC San Diego, or remote for internships",
+    protectedTime: "One free evening a week and 7+ hours of sleep",
+  },
+  goals: [
+    { id: "sg1", title: "Keep ECE 5, MATH 20A and PHYS 2A at A- or better this quarter", horizon: "short", category: "academic" },
+    { id: "sg2", title: "Email two UCSD labs about first-year research help", horizon: "short", category: "career" },
+    { id: "sg3", title: "Finish the line-follower with an IEEE quarterly project team", horizon: "short", category: "project" },
+    { id: "sg4", title: "Start research at UCSD by spring quarter", horizon: "long", category: "career" },
+    { id: "sg5", title: "Land a hardware or embedded summer internship after the first year", horizon: "long", category: "career" },
+  ],
+  resume: {
+    name: "Seojin (EXAMPLE student)",
+    contact: "EXAMPLE ONLY: placeholder, no real email, phone, or address",
+    education: [
+      { title: "B.S. Electrical Engineering (in progress)", org: "UC San Diego, Jacobs School of Engineering", dates: "Fall 2026 to present", bullets: ["First-year student. GPA not yet available."] },
+    ],
+    coursework: [
+      "ECE 5: Introduction to Electrical and Computer Engineering (in progress)",
+      "MATH 20A: Calculus for Science and Engineering (in progress)",
+      "PHYS 2A: Physics, Mechanics (in progress)",
+    ],
+    projects: [
+      {
+        title: "Line-following robot (example project)", dates: "Summer 2026",
+        bullets: [
+          "Built a two-motor robot car from a starter kit using an Arduino and two infrared sensors.",
+          "Wrote the control loop in C++ and tuned it until the robot completed a taped track.",
+          "Kept the code and wiring notes in a Git repository.",
+        ],
+      },
+      {
+        title: "Room temperature logger (example project)", dates: "Spring 2026",
+        bullets: [
+          "Read a temperature sensor with a microcontroller and saved readings to a CSV file.",
+          "Plotted a week of data with a short Python script.",
+        ],
+      },
+    ],
+    activities: [
+      {
+        title: "Member", org: "High school robotics club (example)", dates: "2024 to 2026",
+        bullets: [
+          "Helped wire and test sensors for a competition robot.",
+          "Presented a short demo of the robot at a school open house.",
+        ],
+      },
+    ],
+    skills: ["C++ (intro level)", "Python (basic scripting)", "Arduino", "Breadboard circuits", "Git"],
+  },
+};
+
 const seojinTasks: Task[] = [
   { id: "t1", title: "Date night", category: "fun", priority: "highest", timed: true, due: "Sat 7pm" },
-  { id: "t2", title: "Study for ECE 17 midterm", category: "academic", timed: false, due: "Thu", hours: 8 },
-  { id: "t3", title: "Job interview — Qualcomm intern", category: "career", timed: true, due: "Wed 4pm", pinned: true, priority: "high", subtasks: [
-    { id: "t3a", title: "Behavioral stories" },
-    { id: "t3b", title: "C++ practice" },
-    { id: "t3c", title: "Reread the job post" },
+  { id: "t2", title: "Study for MATH 20A midterm", category: "academic", timed: false, due: "Thu", hours: 8 },
+  { id: "t3", title: "Résumé review at the Career Center (example)", category: "career", timed: true, due: "Wed 4pm", pinned: true, priority: "high", subtasks: [
+    { id: "t3a", title: "Add the line-follower project" },
+    { id: "t3b", title: "List ECE 5, MATH 20A and PHYS 2A" },
+    { id: "t3c", title: "Check for placeholder contact details" },
   ] },
-  { id: "t4", title: "Interview prep (behavioral + C++)", category: "career", timed: false, hours: 3 },
+  { id: "t4", title: "Internship application prep (behavioral + intro C++)", category: "career", timed: false, hours: 3 },
   { id: "t5", title: "IEEE Quarterly Project: line-follower", category: "project", timed: false, hours: 4, due: "Sun" },
   { id: "t6", title: "ECE 5 robot build checkpoint", category: "project", timed: false, hours: 3, due: "Fri" },
-  { id: "t7", title: "MATH 20C problem set 4", category: "academic", timed: false, hours: 3, due: "Fri" },
+  { id: "t7", title: "MATH 20A problem set 4", category: "academic", timed: false, hours: 3, due: "Fri" },
   { id: "t8", title: "Basketball game", category: "fun", timed: true, due: "Fri 7pm" },
   { id: "t9", title: "Dance class", category: "fun", timed: true, due: "Tue 6pm" },
   { id: "t10", title: "Piano practice", category: "fun", timed: false, hours: 2 },
@@ -112,12 +236,12 @@ const seojinTasks: Task[] = [
 ];
 
 const seojinLife: CalEvent[] = [
-  { day: 2, start: 16, end: 17, title: "Qualcomm interview", kind: "task" },
+  { day: 2, start: 16, end: 17, title: "Résumé review", kind: "task" },
   { day: 1, start: 18, end: 19.5, title: "Dance class", kind: "life" },
   { day: 4, start: 19, end: 21, title: "Basketball game", kind: "life" },
   { day: 5, start: 19, end: 22, title: "Date night ♥", kind: "life" },
-  { day: 3, start: 19, end: 21, title: "ECE 17 study block", kind: "task" },
-  { day: 0, start: 15, end: 17, title: "ECE 17 study block", kind: "task" },
+  { day: 3, start: 19, end: 21, title: "MATH 20A study block", kind: "task" },
+  { day: 0, start: 15, end: 17, title: "MATH 20A study block", kind: "task" },
   { day: 6, start: 13, end: 16, title: "IEEE QP build", kind: "task" },
 ];
 
@@ -127,18 +251,8 @@ export const STUDENTS: Student[] = [
     gpa: null, gpaGoal: 3.8, status: "on-track",
     statusNote: "Maximizing productivity. Academia and career come first.",
     focus: ["academic", "career", "project", "fun"],
-    courses: ece.map((course) => course.code === "ECE 17" ? {
-      ...course,
-      subtasks: [
-        { id: "e17a", title: "Redo the last lab" },
-        { id: "e17b", title: "Midterm practice set" },
-      ],
-      goals: [
-        { id: "e17s", title: "Ready for the Thursday midterm", horizon: "short" as const },
-        { id: "e17l", title: "Finish ECE 17 with an A", horizon: "long" as const },
-      ],
-    } : course),
-    events: [...classes(), ...seojinLife],
+    courses: seojinCourses,
+    events: [...seojinClasses(), ...seojinLife],
     tasks: seojinTasks,
     weeklyTargets: [
       { label: "Study outside class", hours: 20, done: 9 },
@@ -147,9 +261,13 @@ export const STUDENTS: Student[] = [
     ],
     longTerm: [
       { id: "s-m1", text: "Join an IEEE project team", horizon: "month" },
+      { id: "s-m2", text: "Email two UCSD labs about first-year research help", horizon: "month" },
+      { id: "s-m3", text: "Get one résumé review and update the résumé", horizon: "month" },
       { id: "s-y1", text: "3.8+ GPA by end of freshman year", horizon: "year" },
-      { id: "s-y2", text: "Land a summer research or intern role", horizon: "year" },
+      { id: "s-y2", text: "Start research at UCSD by spring quarter", horizon: "year" },
+      { id: "s-y3", text: "Land a hardware or embedded summer internship", horizon: "year" },
     ],
+    ...seojinProfile,
   },
   {
     id: "marcus", name: "Marcus", major: "Electrical Engineering", year: "Freshman", school: "UC San Diego",
