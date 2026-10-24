@@ -2,8 +2,36 @@ import type { CalEvent, Category, Status, Task } from "./launchpad";
 
 /** Schedule math for the Scheduler tab: task order, free-time gaps, and weekly time totals. */
 
+/** The part of each day that counts as the student's time, in whole or half hours (0–24). */
+export interface DayWindow {
+  start: number;
+  end: number;
+}
+
 export const DAY_START = 6;
 export const DAY_END = 23;
+export const DEFAULT_WINDOW: DayWindow = { start: DAY_START, end: DAY_END };
+/** Shortest allowed window, in hours per day. */
+export const MIN_WINDOW_HOURS = 4;
+
+/** True when both ends are on the half hour, inside 0–24, and at least MIN_WINDOW_HOURS apart. */
+export function isValidWindow(window: unknown): window is DayWindow {
+  if (!window || typeof window !== "object") return false;
+  const { start, end } = window as Partial<DayWindow>;
+  const half = (n: unknown): n is number =>
+    typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 24 && n * 2 === Math.round(n * 2);
+  return half(start) && half(end) && end - start >= MIN_WINDOW_HOURS;
+}
+
+/** The window if it is valid, otherwise the default (6am–11pm). */
+export function normalizeWindow(window: unknown): DayWindow {
+  return isValidWindow(window) ? { start: window.start, end: window.end } : { ...DEFAULT_WINDOW };
+}
+
+export const windowHours = (window: DayWindow = DEFAULT_WINDOW) => window.end - window.start;
+
+/** Total hours in the week: only the window counts, so (end - start) x 7. */
+export const weekHours = (window: DayWindow = DEFAULT_WINDOW) => windowHours(window) * 7;
 
 /** Gaps shorter than this (hours) are not worth showing. */
 const MIN_GAP = 0.15;
@@ -94,22 +122,26 @@ export interface Gap {
 }
 
 /**
- * Finds empty time per day between DAY_START and DAY_END.
+ * Finds empty time per day inside the day window (default 6am–11pm); time outside it is ignored.
  * - "pseudo": under 30 min between two classes (walking/transition time).
  * - "lazy": 2h+ on a "behind" student's weekday, after the day's first event.
  * - "free": everything else that is at least 30 min.
  * Overlapping events are handled by tracking the event that ends last.
  */
-export function findGaps(events: CalEvent[], status: Status): Gap[] {
+export function findGaps(
+  events: CalEvent[],
+  status: Status,
+  window: DayWindow = DEFAULT_WINDOW,
+): Gap[] {
   const gaps: Gap[] = [];
   for (let day = 0; day < 7; day++) {
     const todays = events
       .filter((event) => event.day === day)
       .sort((a, b) => a.start - b.start || a.end - b.end);
-    let cursor = DAY_START;
+    let cursor = window.start;
     let last: CalEvent | null = null;
     for (const next of [...todays, null]) {
-      const until = next ? Math.min(next.start, DAY_END) : DAY_END;
+      const until = next ? Math.min(next.start, window.end) : window.end;
       const length = until - cursor;
       if (length >= MIN_GAP - EPS) {
         const type = gapType(length, last, next, status, day);
@@ -139,12 +171,12 @@ function gapType(
 
 type Interval = [number, number];
 
-/** Clips events to the visible day and merges overlaps, per day, so no hour is counted twice. */
-function merged(events: CalEvent[]): Map<number, Interval[]> {
+/** Clips events to the window and merges overlaps, per day, so no hour is counted twice. */
+function merged(events: CalEvent[], window: DayWindow): Map<number, Interval[]> {
   const byDay = new Map<number, Interval[]>();
   for (const event of events) {
-    const start = Math.max(DAY_START, event.start);
-    const end = Math.min(DAY_END, event.end);
+    const start = Math.max(window.start, event.start);
+    const end = Math.min(window.end, event.end);
     if (!(end > start) || event.day < 0 || event.day > 6) continue;
     byDay.set(event.day, [...(byDay.get(event.day) ?? []), [start, end]]);
   }
@@ -189,19 +221,34 @@ function subtract(
 }
 
 /**
- * Weekly time totals in hours (rounded to 0.01):
+ * Weekly time totals in hours (rounded to 0.01), all measured inside the day window (the week's
+ * total is weekHours(window)):
  * - allocated: class and task time already on the calendar
  * - reallocate: life time that could move, plus lazy gaps
  * - recompensate: free gaps still open
- * Overlapping or duplicate events count once; life time under a class or task counts as allocated.
+ * Events are clipped to the window (events entirely outside are ignored). Overlapping or
+ * duplicate events count once; life time under a class or task counts as allocated.
  */
-export function timeUse(events: CalEvent[], gaps: Gap[]) {
-  const work = merged(events.filter((event) => event.kind !== "life"));
-  const life = subtract(merged(events.filter((event) => event.kind === "life")), work);
+export function timeUse(events: CalEvent[], gaps: Gap[], window: DayWindow = DEFAULT_WINDOW) {
+  const work = merged(
+    events.filter((event) => event.kind !== "life"),
+    window,
+  );
+  const life = subtract(
+    merged(
+      events.filter((event) => event.kind === "life"),
+      window,
+    ),
+    work,
+  );
   const gapHours = (type: Gap["type"]) =>
     gaps
       .filter((gap) => gap.type === type)
-      .reduce((sum, gap) => sum + Math.max(0, gap.end - gap.start), 0);
+      .reduce(
+        (sum, gap) =>
+          sum + Math.max(0, Math.min(gap.end, window.end) - Math.max(gap.start, window.start)),
+        0,
+      );
   return {
     allocated: round2(total(work)),
     reallocate: round2(total(life) + gapHours("lazy")),

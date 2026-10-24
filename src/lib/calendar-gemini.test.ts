@@ -84,20 +84,23 @@ describe("eventsFromModel", () => {
     );
     expect(events.map((e) => e.kind)).toEqual(["class", "task", "life"]);
   });
-  it("gives a missing or backwards end one hour and clips to the visible day", () => {
+  it("gives a missing or backwards end one hour and clips only to the calendar day, not the day window", () => {
     const events = eventsFromModel(
       [
         { title: "no end", date: "2026-03-02", start: "10:00" },
         { title: "backwards", date: "2026-03-02", start: "12:00", end: "11:00" },
-        { title: "late", date: "2026-03-02", start: "22:00", end: "23:59" },
-        { title: "too early", date: "2026-03-02", start: "03:00", end: "05:00" },
+        { title: "late", date: "2026-03-02", start: "22:00", end: "24:00" },
+        { title: "early", date: "2026-03-02", start: "03:00", end: "05:00" },
+        { title: "past midnight", date: "2026-03-02", start: "23:30", end: "23:30" },
       ],
       MONDAY,
     );
     expect(events.map((e) => [e.title, e.start, e.end])).toEqual([
+      ["early", 3, 5],
       ["no end", 10, 11],
       ["backwards", 12, 13],
-      ["late", 22, 23],
+      ["late", 22, 24],
+      ["past midnight", 23.5, 24],
     ]);
   });
   it("drops duplicates", () => {

@@ -1,5 +1,4 @@
 import type { CalEvent } from "./launchpad";
-import { DAY_END, DAY_START } from "./launchpad";
 
 const WEEKDAY: Record<string, number> = { MO: 0, TU: 1, WE: 2, TH: 3, FR: 4, SA: 5, SU: 6 };
 const CLASS_RE = /\b(ECE|MATH|PHYS|CHEM|CSE|MAE|BENG|SE|COGS)\s*\d|\b(lecture|discussion|seminar)\b|\blab\b/i;
@@ -114,10 +113,14 @@ export function classifyTitle(title: string): CalEvent["kind"] {
   return CLASS_RE.test(title) ? "class" : LIFE_RE.test(title) ? "life" : "task";
 }
 
-/** Clamp an event to the visible day; null when too short or on an invalid day. */
+/**
+ * Clamp an event to the calendar day (0–24h); null when too short or on an invalid day.
+ * Imports are not clipped to the student's day window: the grid and the time math clip, so a
+ * later change of window shows or hides events without re-importing.
+ */
 export function clip(day: number, start: number, end: number, title: string, kind: CalEvent["kind"]): CalEvent | null {
-  const a = Math.max(DAY_START, start);
-  const b = Math.min(DAY_END, end);
+  const a = Math.max(0, start);
+  const b = Math.min(24, end);
   if (b - a < 0.15 || day < 0 || day > 6) return null;
   return { day, start: round2(a), end: round2(b), title, kind };
 }
