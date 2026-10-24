@@ -12,7 +12,6 @@ export type Opportunity = { name: string; sub?: string; what: string; url: strin
 export type OpportunityLists = { research: Opportunity[]; projects: Opportunity[] };
 
 type ChatBody = {
-  model: "Gemini" | "Grok";
   message: string;
   student: object;
 };
@@ -58,7 +57,6 @@ export async function chatWithMentor(body: ChatBody): Promise<Turn> {
     `They said: ${body.message}`,
   ].join("\n");
   const events = existingEventsOf(body.student);
-  if (body.model === "Grok") return grok(prompt, events);
   return geminiTurnParts([{ text: prompt }], true, events);
 }
 
@@ -111,9 +109,11 @@ export async function loadOpportunities(): Promise<OpportunityLists | null> {
 async function geminiTurnParts(parts: Record<string, unknown>[], allowSmall: boolean, events?: unknown[]): Promise<Turn> {
   const result = await geminiText(parts, false);
   if (!result.text) {
-    const reply = result.limited
-      ? "The assistant is rate-limited right now. Nothing was changed."
-      : "The assistant could not finish that. Nothing was changed.";
+    const reply = result.practice
+      ? "The assistant is in practice mode until its key is set. Nothing was changed."
+      : result.limited
+        ? "The assistant is rate-limited right now. Nothing was changed."
+        : "The assistant could not finish that. Nothing was changed.";
     return { reply, patch: null, choices: defaultChips() };
   }
   const parsed = jsonFrom(result.text) as { reply?: unknown; patch?: unknown; choices?: unknown } | null;
@@ -121,9 +121,12 @@ async function geminiTurnParts(parts: Record<string, unknown>[], allowSmall: boo
   return turnOf(reply, parsed?.patch, allowSmall, events, parsed?.choices);
 }
 
-async function geminiText(parts: Record<string, unknown>[], search: boolean): Promise<{ text: string; limited: boolean }> {
+async function geminiText(
+  parts: Record<string, unknown>[],
+  search: boolean,
+): Promise<{ text: string; limited: boolean; practice?: boolean }> {
   const key = envValue("GEMINI_API_KEY");
-  if (!key) return { text: "", limited: false };
+  if (!key) return { text: "", limited: false, practice: true };
   const tools = search ? [[{ google_search: {} }], [{ googleSearch: {} }]] : [[]];
   let limited = false;
   for (const tool of tools) {
@@ -159,34 +162,6 @@ async function geminiText(parts: Record<string, unknown>[], search: boolean): Pr
     }
   }
   return { text: "", limited };
-}
-
-async function grok(prompt: string, events?: unknown[]): Promise<Turn> {
-  const key = envValue("XAI_API_KEY");
-  if (!key) return { reply: "Grok is in practice mode until an xAI key is set. Nothing was changed.", patch: null, choices: defaultChips() };
-  const response = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: "grok-4.7",
-      temperature: 0.3,
-      reasoning_effort: "low",
-      response_format: { type: "json_object" },
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    if (response.status === 401 || /api key/i.test(detail)) {
-      return { reply: "Grok is in practice mode until a valid xAI key is set. Nothing was changed.", patch: null, choices: defaultChips() };
-    }
-    return { reply: "Grok could not finish that. Nothing was changed.", patch: null, choices: defaultChips() };
-  }
-  const payload = await response.json() as { choices?: { message?: { content?: string } }[] };
-  const text = payload.choices?.[0]?.message?.content ?? "";
-  const parsed = jsonFrom(text) as { reply?: unknown; patch?: unknown; choices?: unknown } | null;
-  const reply = typeof parsed?.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : "Grok could not finish that. Nothing was changed.";
-  return turnOf(reply, parsed?.patch, true, events, parsed?.choices);
 }
 
 /**

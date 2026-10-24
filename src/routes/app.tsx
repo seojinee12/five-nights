@@ -507,7 +507,7 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.`, choices: asChips(defaultChips()) }]), [s.id]);
+  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm your mentor. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.`, choices: asChips(defaultChips()) }]), [s.id]);
   useEffect(() => {
     if (!note || seenNote.current === note.id) return;
     seenNote.current = note.id;
@@ -551,7 +551,7 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
       return;
     }
     const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
-    void mentorChat({ data: { model: "Grok", message, student: snapshot } }).then((turn) => {
+    void mentorChat({ data: { message, student: snapshot } }).then((turn) => {
       if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);
         setPending(null);
@@ -576,7 +576,6 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
     <aside className="flex h-[calc(100vh-110px)] flex-col rounded-xl border bg-card lg:sticky lg:top-5">
       <div className="flex items-center gap-2 border-b p-3">
         <b className="text-sm">Mentor</b>
-        <span className="ml-auto rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground">Grok</span>
       </div>
       <div
         ref={listRef}

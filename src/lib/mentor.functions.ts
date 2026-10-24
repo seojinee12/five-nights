@@ -5,7 +5,6 @@ import { defaultChips } from "./mentorChips";
 import type { Turn, OpportunityLists } from "./mentor.server";
 
 type ChatBody = {
-  model: "Gemini" | "Grok";
   message: string;
   student: {
     name: string;
