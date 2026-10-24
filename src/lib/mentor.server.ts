@@ -99,14 +99,24 @@ export async function calendarEventsFromGemini(body: CalendarRequest): Promise<C
   return eventsFromModel(parsed, weekMonday);
 }
 
-export async function loadOpportunities(): Promise<OpportunityLists | null> {
-  const prompt = [
-    "Use Google Search. List real, current opportunities for a UC San Diego electrical engineering freshman.",
+/** The search prompt. With no major it is the built-in electrical engineering one; a new account passes its own major. */
+export function opportunitiesPrompt(major?: string): string {
+  const clean = (major ?? "")
+    .replace(/[^A-Za-z &,-]/g, "")
+    .trim()
+    .slice(0, 60);
+  const field = clean ? clean.toLowerCase() : "electrical engineering";
+  return [
+    `Use Google Search. List real, current opportunities for a UC San Diego ${field} freshman.`,
     "Split them into research labs and beginner-friendly project teams.",
     "Every item needs name, sub (person or host, optional), what (one sentence, including if applications are closed), and the official https URL.",
     "Do not invent URLs. Prefer the organization's own site. Skip high-school-only programs.",
     "Return JSON only: {\"research\": [], \"projects\": []}.",
   ].join(" ");
+}
+
+export async function loadOpportunities(major?: string): Promise<OpportunityLists | null> {
+  const prompt = opportunitiesPrompt(major);
   const result = await geminiText([{ text: prompt }], true);
   const parsed = jsonFrom(result.text);
   const lists = listsFrom(parsed);

@@ -55,10 +55,13 @@ export const parseCalendarWithGemini = createServerFn({ method: "POST" })
     }
   });
 
-export const sourceOpportunities = createServerFn({ method: "GET" }).handler(async (): Promise<OpportunityLists | null> => {
-  const { loadOpportunities } = await import("./mentor.server");
-  return loadOpportunities();
-});
+/** Live lists for the Opportunities tab. A new account passes its major so the search is not electrical engineering by default. */
+export const sourceOpportunities = createServerFn({ method: "GET" })
+  .validator((data?: { major?: string }) => data)
+  .handler(async ({ data }): Promise<OpportunityLists | null> => {
+    const { loadOpportunities } = await import("./mentor.server");
+    return loadOpportunities(typeof data?.major === "string" ? data.major.slice(0, 80) : undefined);
+  });
 
 /** Asks for additional opportunities, skipping the ones in `exclude`. null means it could not search right now. */
 export const findMoreOpportunities = createServerFn({ method: "POST" })

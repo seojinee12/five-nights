@@ -382,3 +382,60 @@ export const PROJECTS = [
   { name: "Jacobs School student organizations", url: "https://jacobs.ucsd.edu/idea/current-undergraduates/undergraduate", what: "Jacobs School directory of undergraduate engineering organizations." },
 ];
 export const SEOJIN: Student = STUDENTS[0] as Student;
+
+const CATEGORIES: Category[] = ["academic", "career", "project", "fun"];
+
+export interface BlankStudentInput {
+  name?: unknown;
+  major?: unknown;
+  focus?: unknown;
+}
+
+/**
+ * A brand-new student for the landing-page setup ("me"). Starts with no classes, courses, tasks,
+ * targets or goals, and none of a demo student's data. Only the user's own answers (name, major,
+ * focus) are used. Focus keeps the order picked; categories not picked follow in default order.
+ */
+export function blankStudent(input: BlankStudentInput = {}): Student {
+  const text = (value: unknown, fallback: string) =>
+    typeof value === "string" && value.trim() ? value.trim() : fallback;
+  const picked = (Array.isArray(input.focus) ? input.focus : []).filter(
+    (f, i, all): f is Category => CATEGORIES.includes(f as Category) && all.indexOf(f) === i,
+  );
+  return {
+    id: "me",
+    name: text(input.name, "Engineer"),
+    major: text(input.major, "Engineering"),
+    year: "Freshman",
+    school: "UC San Diego",
+    gpa: null,
+    gpaGoal: 3.5,
+    status: "on-track",
+    statusNote: "Fresh start.",
+    focus: [...picked, ...CATEGORIES.filter((c) => !picked.includes(c))],
+    courses: [],
+    events: [],
+    tasks: [],
+    weeklyTargets: [],
+    longTerm: [],
+    goals: [],
+    interests: [],
+    skills: [],
+  };
+}
+
+/**
+ * Reads the landing-page profile from localStorage text. Only the three answers the form asks for
+ * (name, major, focus) are kept, so anything else stored under that key is never picked up.
+ * Bad or missing text gives an empty profile.
+ */
+export function parseProfile(raw: string | null): BlankStudentInput {
+  try {
+    const value: unknown = JSON.parse(raw || "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const { name, major, focus } = value as BlankStudentInput;
+    return { name, major, focus };
+  } catch {
+    return {};
+  }
+}

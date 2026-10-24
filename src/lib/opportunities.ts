@@ -537,9 +537,9 @@ function entries(list: ResumeEntryLike[] | undefined): string[] {
 }
 
 /**
- * Builds the ranking profile from a student. The custom "me" student is built from the demo
- * student's record with only a few fields replaced, so for "me" the personal demo fields
- * (interests, skills, goals, preferences, resume) are ignored rather than ranked on.
+ * Builds the ranking profile from a student. The custom "me" student starts blank (major and
+ * focus only), and the personal profile fields (interests, skills, goals, preferences, resume)
+ * are still ignored for "me", so nothing but the major, courses, tasks and reminders is ranked on.
  */
 export function profileFromStudent(s: StudentLike): OpportunityProfile {
   const own = s.id !== "me";
