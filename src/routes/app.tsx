@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Rocket, Upload, CalendarPlus, Send, AlertTriangle, ExternalLink, Check, Paperclip, Plus, Pin } from "lucide-react";
+import { ArrowLeft, Rocket, Upload, CalendarPlus, Send, AlertTriangle, ExternalLink, Check, Paperclip, Plus, Pin, MoreHorizontal, ChevronRight } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   STUDENTS, SEOJIN, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
   type Student, type Category, type Task, type Course, type Reminder,
@@ -165,9 +166,8 @@ function Scheduler({ s, onCalendar, onChange }: { s: Student; onCalendar: () => 
           <h2 className="font-semibold">This week's time</h2>
           <div className="mt-3 space-y-3">
             {rows.map((row) => (
-              <div key={row.label}>
+              <div key={row.label} title={row.note}>
                 <div className="flex justify-between gap-3 text-sm"><span>{row.label}</span><span className="font-mono text-xs">{row.hours.toFixed(1)}h</span></div>
-                <p className="text-xs text-muted-foreground">{row.note}</p>
                 <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-accent" style={{ width: `${Math.min(100, (row.hours / max) * 100)}%` }} /></div>
               </div>
             ))}
@@ -194,37 +194,73 @@ function WorkingOn({ s, onChange }: { s: Student; onChange: (fn: (current: Stude
 }
 
 function TaskBlock({ task, onChange }: { task: Task; onChange: (task: Task) => void }) {
+  const steps = task.subtasks ?? [];
+  const meta = [task.hours ? `${task.hours}h` : null, task.due ?? "this week", steps.length ? `${steps.length} ${steps.length === 1 ? "step" : "steps"}` : null]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <li className="py-2 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${task.category === "academic" ? "bg-class" : task.category === "fun" ? "bg-life" : "bg-task"}`} />
-        <input value={task.title} onChange={(e) => onChange({ ...task, title: e.target.value })}
-          className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1" />
-        <select value={task.category} onChange={(e) => onChange({ ...task, category: e.target.value as Category })}
-          className="rounded-md border bg-background px-2 py-1 text-xs">
-          {(Object.keys(CAT_LABEL) as Category[]).map((cat) => <option key={cat} value={cat}>{CAT_LABEL[cat]}</option>)}
-        </select>
-        <button type="button" onClick={() => onChange({ ...task, pinned: !task.pinned })}
-          className={`inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-bold uppercase ${task.pinned ? "bg-accent text-accent-foreground" : "border hover:bg-muted"}`}>
-          <Pin className="h-3 w-3" />{task.pinned ? "Pinned" : "Pin"}
-        </button>
-        {task.priority === "highest" && <span className="rounded bg-accent px-1.5 text-[10px] font-bold uppercase text-accent-foreground">highest</span>}
-        <span className="font-mono text-xs text-muted-foreground">{task.hours ? `${task.hours}h · ` : ""}{task.due ?? "this week"}</span>
-      </div>
-      <ItemList
-        items={task.subtasks ?? []}
-        placeholder="Add a subtask"
-        onChange={(id, title) => onChange({ ...task, subtasks: (task.subtasks ?? []).map((item) => item.id === id ? { ...item, title } : item) })}
-        onAdd={(title) => onChange({ ...task, subtasks: [...(task.subtasks ?? []), { id: nid(), title }] })}
+    <li className="group flex items-center gap-2 py-1 text-sm">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${task.category === "academic" ? "bg-class" : task.category === "fun" ? "bg-life" : "bg-task"}`} />
+      <input
+        value={task.title}
+        onChange={(e) => onChange({ ...task, title: e.target.value })}
+        className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 hover:border-border focus:border-ring focus:bg-background focus:outline-none"
       />
+      {task.pinned && <Pin className="h-3 w-3 shrink-0 text-accent" aria-label="Pinned" />}
+      {task.priority === "highest" && <span className="rounded bg-accent px-1.5 text-[10px] font-bold uppercase text-accent-foreground">highest</span>}
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">{meta}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Edit ${task.title}`}
+            className="shrink-0 rounded-md p-1 text-muted-foreground opacity-60 hover:bg-muted hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 space-y-3 text-sm">
+          <div className="flex items-center gap-2">
+            <select
+              value={task.category}
+              onChange={(e) => onChange({ ...task, category: e.target.value as Category })}
+              className="flex-1 rounded-md border bg-background px-2 py-1 text-xs"
+            >
+              {(Object.keys(CAT_LABEL) as Category[]).map((cat) => (
+                <option key={cat} value={cat}>
+                  {CAT_LABEL[cat]}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => onChange({ ...task, pinned: !task.pinned })}
+              className={`inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-bold uppercase ${task.pinned ? "bg-accent text-accent-foreground" : "border hover:bg-muted"}`}
+            >
+              <Pin className="h-3 w-3" />
+              {task.pinned ? "Pinned" : "Pin"}
+            </button>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Steps</div>
+            <ItemList
+              className="mt-1 space-y-1"
+              items={steps}
+              placeholder="Add a subtask"
+              onChange={(id, title) => onChange({ ...task, subtasks: steps.map((item) => (item.id === id ? { ...item, title } : item)) })}
+              onAdd={(title) => onChange({ ...task, subtasks: [...steps, { id: nid(), title }] })}
+            />
+          </div>
+        </PopoverContent>
+      </Popover>
     </li>
   );
 }
 
-function ItemList({ items, placeholder, onChange, onAdd }: { items: { id: string; title: string }[]; placeholder: string; onChange: (id: string, title: string) => void; onAdd: (title: string) => void }) {
+function ItemList({ items, placeholder, onChange, onAdd, className = "ml-4 mt-2 space-y-1" }: { items: { id: string; title: string }[]; placeholder: string; onChange: (id: string, title: string) => void; onAdd: (title: string) => void; className?: string }) {
   const [draft, setDraft] = useState("");
   return (
-    <div className="ml-4 mt-2 space-y-1">
+    <div className={className}>
       {items.map((item) => (
         <input key={item.id} value={item.title} onChange={(e) => onChange(item.id, e.target.value)}
           className="w-full rounded-md border bg-background px-2 py-1 text-sm" />
@@ -248,8 +284,12 @@ function WeekView({ s, gaps }: { s: Student; gaps: ReturnType<typeof findGaps> }
     <section className="rounded-xl border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs">
         <h2 className="mr-auto text-base font-semibold">This week</h2>
-        <Legend c="bg-class" l="Class" /><Legend c="bg-task" l="Task" /><Legend c="bg-life" l="Life" />
-        <Legend c="hatch-free" l="Free" /><Legend c="bg-pseudo" l="Pseudo-free" /><Legend c="hatch-lazy" l="Unused (lazy)" />
+        <Legend c="bg-class" l="Class" />
+        <Legend c="bg-task" l="Task" />
+        <Legend c="bg-life" l="Life" />
+        <Legend c="hatch-free" l="Free" />
+        {gaps.some((g) => g.type === "pseudo") && <Legend c="bg-pseudo" l="Pseudo-free" />}
+        {gaps.some((g) => g.type === "lazy") && <Legend c="hatch-lazy" l="Unused" />}
       </div>
       <div className="grid grid-cols-[36px_repeat(7,1fr)] gap-1">
         <div />
@@ -304,6 +344,8 @@ function Academics({ s, onSyllabus, onChange }: { s: Student; onSyllabus: () => 
 
 function CourseBlock({ course, onChange }: { course: Course; onChange: (course: Course) => void }) {
   const [pane, setPane] = useState<"tasks" | "short" | "long">("tasks");
+  const [open, setOpen] = useState(false);
+  const count = (course.subtasks?.length ?? 0) + (course.goals?.length ?? 0);
   const panes = [
     ["tasks", "Tasks"],
     ["short", "Short-term"],
@@ -312,32 +354,38 @@ function CourseBlock({ course, onChange }: { course: Course; onChange: (course: 
   const horizon = pane === "short" ? "short" : "long";
   return (
     <li className="py-3 text-sm">
-      <div className="flex items-center gap-3">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 text-left">
+        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
         <span className="w-24 font-mono font-semibold">{course.code}</span>
         <span className="flex-1">{course.name}</span>
+        {count > 0 && !open && <span className="font-mono text-xs text-muted-foreground">{count} items</span>}
         <span className="font-mono text-xs text-muted-foreground">{course.units}u</span>
         <span className="w-8 text-right font-semibold">{course.grade ?? "IP"}</span>
-      </div>
-      <div className="mt-2 flex gap-1 text-xs">
-        {panes.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setPane(id)}
-            className={`rounded-md px-2 py-1 ${pane === id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{label}</button>
-        ))}
-      </div>
-      {pane === "tasks" ? (
-        <ItemList
-          items={course.subtasks ?? []}
-          placeholder="Add a coursework step"
-          onChange={(id, title) => onChange({ ...course, subtasks: (course.subtasks ?? []).map((item) => item.id === id ? { ...item, title } : item) })}
-          onAdd={(title) => onChange({ ...course, subtasks: [...(course.subtasks ?? []), { id: nid(), title }] })}
-        />
-      ) : (
-        <ItemList
-          items={(course.goals ?? []).filter((goal) => goal.horizon === horizon)}
-          placeholder={pane === "short" ? "Add a short-term goal" : "Add a long-term goal"}
-          onChange={(id, title) => onChange({ ...course, goals: (course.goals ?? []).map((goal) => goal.id === id ? { ...goal, title } : goal) })}
-          onAdd={(title) => onChange({ ...course, goals: [...(course.goals ?? []), { id: nid(), title, horizon }] })}
-        />
+      </button>
+      {open && (
+        <>
+          <div className="mt-2 flex gap-1 text-xs">
+            {panes.map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setPane(id)}
+                className={`rounded-md px-2 py-1 ${pane === id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{label}</button>
+            ))}
+          </div>
+          {pane === "tasks" ? (
+            <ItemList
+              items={course.subtasks ?? []}
+              placeholder="Add a coursework step"
+              onChange={(id, title) => onChange({ ...course, subtasks: (course.subtasks ?? []).map((item) => item.id === id ? { ...item, title } : item) })}
+              onAdd={(title) => onChange({ ...course, subtasks: [...(course.subtasks ?? []), { id: nid(), title }] })}
+            />
+          ) : (
+            <ItemList
+              items={(course.goals ?? []).filter((goal) => goal.horizon === horizon)}
+              placeholder={pane === "short" ? "Add a short-term goal" : "Add a long-term goal"}
+              onChange={(id, title) => onChange({ ...course, goals: (course.goals ?? []).map((goal) => goal.id === id ? { ...goal, title } : goal) })}
+              onAdd={(title) => onChange({ ...course, goals: [...(course.goals ?? []), { id: nid(), title, horizon }] })}
+            />
+          )}
+        </>
       )}
     </li>
   );
