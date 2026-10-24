@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { dropExcluded, findMorePrompt, type FindMoreInput } from "./findMore";
 import { calendarPrompt, eventsFromModel, parseIsoDate, type CalendarRequest } from "./calendar-gemini";
 import type { CalEvent } from "./launchpad";
 import { sanitizePatch, type Patch } from "./patch";
@@ -103,6 +104,21 @@ export async function loadOpportunities(): Promise<OpportunityLists | null> {
   const lists = listsFrom(parsed);
   if (!lists || lists.research.length < 2 || lists.projects.length < 2) return null;
   return lists;
+}
+
+/**
+ * Looks for opportunities beyond the ones the student already has. Returns null when it could
+ * not search (no key, failed call, unreadable reply); empty lists mean nothing new turned up.
+ */
+export async function findMoreOpportunities(input: FindMoreInput): Promise<OpportunityLists | null> {
+  const result = await geminiText([{ text: findMorePrompt(input) }], true);
+  if (!result.text) return null;
+  const parsed = jsonFrom(result.text);
+  if (!parsed || typeof parsed !== "object") return null;
+  const raw = parsed as { research?: unknown; projects?: unknown };
+  const research = dropExcluded(itemsOf(raw.research), input.exclude);
+  const projects = dropExcluded(itemsOf(raw.projects), [...input.exclude, ...research.flatMap((r) => [r.name, r.url])]);
+  return { research, projects };
 }
 
 async function geminiTurnParts(parts: Record<string, unknown>[], allowSmall: boolean, events?: unknown[]): Promise<Turn> {

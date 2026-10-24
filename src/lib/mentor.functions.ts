@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { parseFindMoreInput } from "./findMore";
 import { CalendarRequestSchema } from "./calendar-gemini";
 import type { CalEvent } from "./launchpad";
 import type { Turn, OpportunityLists } from "./mentor.server";
@@ -57,3 +58,15 @@ export const sourceOpportunities = createServerFn({ method: "GET" }).handler(asy
   const { loadOpportunities } = await import("./mentor.server");
   return loadOpportunities();
 });
+
+/** Asks for additional opportunities, skipping the ones in `exclude`. null means it could not search right now. */
+export const findMoreOpportunities = createServerFn({ method: "POST" })
+  .validator((data: unknown) => parseFindMoreInput(data))
+  .handler(async ({ data }): Promise<OpportunityLists | null> => {
+    try {
+      const { findMoreOpportunities: find } = await import("./mentor.server");
+      return await find(data);
+    } catch {
+      return null;
+    }
+  });
