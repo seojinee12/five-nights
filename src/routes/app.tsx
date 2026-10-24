@@ -6,6 +6,7 @@ import {
   STUDENTS, SEOJIN, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
   type Student, type Category, type Task, type Course, type Reminder,
 } from "@/lib/launchpad";
+import { parseFocusProfile } from "@/lib/focus";
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
@@ -37,9 +38,9 @@ function AppPage() {
   const [custom, setCustom] = useState<Student | null>(null);
   useEffect(() => {
     if (u !== "me") return;
-    const p = JSON.parse(localStorage.getItem("lp-profile") || "{}");
+    const p = parseFocusProfile(localStorage.getItem("lp-profile"));
     setCustom({ ...SEOJIN, id: "me", name: p.name || "Engineer", major: p.major || "Engineering",
-      focus: [...(p.focus || []), ...SEOJIN.focus.filter((f) => !(p.focus || []).includes(f))],
+      focus: [...p.focus, ...SEOJIN.focus.filter((f) => !p.focus.includes(f))], customFocus: p.customFocus,
       events: SEOJIN.events.filter((e) => e.kind === "class"), tasks: [], weeklyTargets: [], longTerm: [], statusNote: "Fresh start." });
   }, [u]);
   const base = u === "me" ? custom : STUDENTS.find((s) => s.id === u) ?? SEOJIN;
@@ -527,7 +528,7 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
       setMsgs((current) => [...current, { me: false, text: "Left the week as it is." }]);
       return;
     }
-    const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
+    const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, ...(s.customFocus?.length ? { customFocus: s.customFocus } : {}), courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
     void mentorChat({ data: { model: "Grok", message: raw, student: snapshot } }).then((turn) => {
       if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);

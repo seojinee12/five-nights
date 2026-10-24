@@ -97,6 +97,8 @@ export interface Student {
   status: Status;
   statusNote: string;
   focus: Category[]; // priority order
+  /** Extra areas the student typed on the landing page; always sanitized before a model prompt. */
+  customFocus?: string[];
   courses: Course[];
   events: CalEvent[];
   tasks: Task[];
