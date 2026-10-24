@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Rocket, Upload, CalendarPlus, Send, AlertTriangle, ExternalLink, Check, Paperclip, Plus, Pin, MoreHorizontal, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  STUDENTS, SEOJIN, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
+  STUDENTS, SEOJIN, blankStudent, parseProfile, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
   type Student, type Category, type Task, type Course, type Reminder,
 } from "@/lib/launchpad";
 import { importCalendarFile } from "@/lib/calendar-import";
@@ -37,10 +37,7 @@ function AppPage() {
   const [custom, setCustom] = useState<Student | null>(null);
   useEffect(() => {
     if (u !== "me") return;
-    const p = JSON.parse(localStorage.getItem("lp-profile") || "{}");
-    setCustom({ ...SEOJIN, id: "me", name: p.name || "Engineer", major: p.major || "Engineering",
-      focus: [...(p.focus || []), ...SEOJIN.focus.filter((f) => !(p.focus || []).includes(f))],
-      events: SEOJIN.events.filter((e) => e.kind === "class"), tasks: [], weeklyTargets: [], longTerm: [], statusNote: "Fresh start." });
+    setCustom(blankStudent(parseProfile(localStorage.getItem("lp-profile"))));
   }, [u]);
   const base = u === "me" ? custom : STUDENTS.find((s) => s.id === u) ?? SEOJIN;
   const [student, setStudent] = useState<Student | null>(() => (base ? structuredClone(base) : null));
@@ -359,6 +356,7 @@ function Academics({ s, onSyllabus, onChange }: { s: Student; onSyllabus: () => 
         <h2 className="font-semibold">Current courses · UCSD catalog</h2>
         <ul className="mt-3 divide-y">
           {s.courses.map((course) => <CourseBlock key={course.code} course={course} onChange={save} />)}
+          {!s.courses.length && <li className="py-3 text-sm text-muted-foreground">No courses yet.</li>}
         </ul>
         <a href="https://catalog.ucsd.edu/curric/ECE.html" target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline">UCSD ECE catalog <ExternalLink className="h-3 w-3" /></a>
       </section>
