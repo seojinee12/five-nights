@@ -583,18 +583,18 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
       </div>
       <div
         ref={listRef}
-        role="log"
-        aria-live="polite"
         className="flex-1 space-y-3 overflow-y-auto p-3 text-sm"
       >
-        {msgs.map((m, i) => (
-          <div key={i} className={m.me ? "ml-8 rounded-lg bg-primary p-2.5 text-primary-foreground" : "mr-4"}>
-            {m.text}
-            {m.undoId !== undefined && (
-              <button type="button" onClick={() => undo(i, m.undoId!)} className="ml-2 rounded-md border px-2 py-0.5 text-xs hover:bg-muted">Undo</button>
-            )}
-          </div>
-        ))}
+        <div role="log" aria-live="polite" className="space-y-3">
+          {msgs.map((m, i) => (
+            <div key={i} className={m.me ? "ml-8 rounded-lg bg-primary p-2.5 text-primary-foreground" : "mr-4"}>
+              {m.text}
+              {m.undoId !== undefined && (
+                <button type="button" onClick={() => undo(i, m.undoId!)} className="ml-2 rounded-md border px-2 py-0.5 text-xs hover:bg-muted">Undo</button>
+              )}
+            </div>
+          ))}
+        </div>
         {quick.length > 0 && (
           <div role="group" aria-label="Quick replies" className="flex flex-wrap gap-1.5">
             {quick.map((chip) => (
