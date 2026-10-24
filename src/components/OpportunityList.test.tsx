@@ -50,7 +50,7 @@ describe("OpportunitiesHeading", () => {
   it("has a labelled, focusable info icon next to the heading", () => {
     render(<OpportunitiesHeading />);
     expect(screen.getByRole("heading", { name: "Best fits for you" })).toBeInTheDocument();
-    const icon = screen.getByLabelText("How is this scored?");
+    const icon = screen.getByLabelText("What the score means");
     expect(icon.tagName).toBe("BUTTON");
     icon.focus();
     expect(icon).toHaveFocus();

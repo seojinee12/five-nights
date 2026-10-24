@@ -19,7 +19,7 @@ export function OpportunitiesHeading() {
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label="How is this scored?"
+                  aria-label="What the score means"
                   className={`-m-1 inline-flex p-1 text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
                 >
                   <Info className="size-3.5" aria-hidden="true" />
