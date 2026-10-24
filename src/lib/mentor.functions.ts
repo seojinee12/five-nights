@@ -6,6 +6,7 @@ import type { Turn, OpportunityLists } from "./mentor.server";
 
 type ChatBody = {
   message: string;
+  previous?: string;
   student: {
     name: string;
     major: string;

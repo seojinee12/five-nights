@@ -9,13 +9,18 @@ import {
   aheadChips,
   asChips,
   behindChips,
+  asksOpenQuestion,
+  asksYesNo,
   defaultChips,
+  fallbackChips,
+  modelTurnChips,
   replyChips,
   resolveChip,
   routeMessage,
   sanitizeChips,
   sanitizeChoices,
   turnChips,
+  withOther,
 } from "./mentorChips";
 import { applyPatch } from "./patch";
 
@@ -127,7 +132,7 @@ describe("chips with full text", () => {
 describe("default chips", () => {
   it("offers the three starters, or yes/no while a change waits", () => {
     expect(defaultChips()).toEqual([AHEAD_CHIP, BEHIND_CHIP, CHANGE_CHIP]);
-    expect(defaultChips(true)).toEqual(["Yes, apply it", "No, leave it"]);
+    expect(defaultChips(true)).toEqual(["Yes, apply it", "No, leave it", "Change something"]);
   });
 
   it("keeps the model's choices, and shows none for a free-text reply that has none", () => {
@@ -331,5 +336,145 @@ describe("routeMessage (what a chip click sends)", () => {
     expect(routeMessage("yes", student, true).route.kind).toBe("apply");
     expect(routeMessage("no", student, true).route.kind).toBe("decline");
     expect(routeMessage("yes", student, false).route.kind).toBe("model");
+  });
+});
+
+describe("contextual fallback chips", () => {
+  it("greeting-like turns offer ahead / behind / schedule change", () => {
+    expect(labels(fallbackChips("start", student))).toEqual([AHEAD_CHIP, BEHIND_CHIP, CHANGE_CHIP]);
+  });
+
+  it("applied and undone offer next steps built from the student's current work", () => {
+    const applied = labels(fallbackChips("applied", student));
+    expect(applied[0]).toBe("What else can I add?");
+    expect(applied.slice(1)).toEqual(["Get ahead on Résumé review", "Go deeper in ECE 5"]);
+    expect(applied).not.toContain(OTHER_CHIP);
+    expect(applied.length).toBeLessThanOrEqual(3);
+    expect(labels(fallbackChips("undone", student))[0]).toBe("Try a different change");
+    const empty = { ...student, tasks: [], courses: [], goals: [] };
+    expect(labels(fallbackChips("applied", empty))).toEqual(["What else can I add?"]);
+  });
+
+  it("a waiting change offers yes / no / change something", () => {
+    expect(labels(fallbackChips("pending", student))).toEqual([
+      "Yes, apply it",
+      "No, leave it",
+      "Change something",
+    ]);
+  });
+
+  it("a reply ending in a yes/no question offers Yes and No", () => {
+    for (const reply of [
+      "I can move the lab to Friday. Want me to do that?",
+      "Is Thursday the day of your midterm?",
+      "Should I plan around it?",
+    ]) {
+      expect(asksYesNo(reply)).toBe(true);
+      expect(labels(fallbackChips("reply", student, reply))).toEqual(["Yes", "No"]);
+    }
+    expect(asksYesNo("Do you want Monday or Tuesday?")).toBe(false);
+    expect(asksYesNo("Sounds like a busy week.")).toBe(false);
+  });
+
+  it("an open ask for a name, date or time gets no chips", () => {
+    for (const reply of [
+      "What's the date of the exam?",
+      "Great. What time does it start?",
+      "What should I call it?",
+    ]) {
+      expect(asksOpenQuestion(reply)).toBe(true);
+      expect(fallbackChips("reply", student, reply)).toEqual([]);
+    }
+    expect(asksOpenQuestion("Which day works?")).toBe(false);
+  });
+
+  it("any other reply offers show my week / add a goal", () => {
+    expect(labels(fallbackChips("reply", student, "Your week looks busy on Thursday."))).toEqual([
+      "Show my week",
+      "Add a goal",
+    ]);
+  });
+
+  it("every fallback is within the chip limits", () => {
+    for (const situation of ["start", "applied", "undone", "pending", "reply"] as const) {
+      const chips = fallbackChips(situation, student, "Anything else?");
+      expect(chips.length).toBeLessThanOrEqual(4);
+      for (const chip of chips) expect(chip.label.length).toBeLessThanOrEqual(40);
+    }
+  });
+});
+
+describe("withOther", () => {
+  it("adds Something else last, without moving the model's four, and only once", () => {
+    const chips = asChips(["A", "B", "C", "D"]);
+    expect(labels(withOther(chips))).toEqual(["A", "B", "C", "D", OTHER_CHIP]);
+    const again = withOther(withOther(chips));
+    expect(labels(again).filter((label) => label === OTHER_CHIP)).toHaveLength(1);
+    expect(labels(withOther(asChips([OTHER_CHIP, "A"])))).toEqual(["A", OTHER_CHIP]);
+  });
+
+  it("adds nothing to an empty list or to the closed yes / no / change set", () => {
+    expect(withOther([])).toEqual([]);
+    const pending = asChips(defaultChips(true));
+    expect(withOther(pending)).toEqual(pending);
+  });
+
+  it("the extra chip focuses the input and sends nothing", () => {
+    const other = withOther(asChips(["A"]))[1];
+    expect(routeMessage(other?.text ?? "", student, false, true).route.kind).toBe("focus");
+  });
+});
+
+describe("modelTurnChips: choices are always present except open-ended asks", () => {
+  const turn = (reply: string, extra: object = {}) => ({ reply, patch: null, ...extra });
+
+  it("uses the model's choices, with full text when a label was cut", () => {
+    const chips = modelTurnChips(turn("Which?", { choices: ["Thursday", "Friday"] }), student);
+    expect(labels(chips)).toEqual(["Thursday", "Friday"]);
+  });
+
+  it("falls back by situation when the model returns none", () => {
+    expect(labels(modelTurnChips(turn("Your week is full."), student))).toEqual([
+      "Show my week",
+      "Add a goal",
+    ]);
+    expect(labels(modelTurnChips(turn("Want me to add it?", { choices: [] }), student))).toEqual([
+      "Yes",
+      "No",
+    ]);
+    expect(labels(modelTurnChips({ reply: "Say yes.", patch: { addTasks: [] } }, student))).toEqual(
+      ["Yes, apply it", "No, leave it", "Change something"],
+    );
+    expect(modelTurnChips(turn("Added.", { choices: undefined }), student, true)[0]?.label).toBe(
+      "What else can I add?",
+    );
+  });
+
+  it("every reply shows chips, with Something else last, except an open ask", () => {
+    const replies = [
+      "Done.",
+      "Your week is full.",
+      "Want me to add it?",
+      "Which day works, Monday or Tuesday?",
+      "Here is a plan: study 3 hours a day. Say yes to add it.",
+    ];
+    for (const reply of replies) {
+      const shown = withOther(modelTurnChips(turn(reply), student));
+      expect(shown.length).toBeGreaterThan(1);
+      expect(shown[shown.length - 1]?.label).toBe(OTHER_CHIP);
+    }
+    expect(withOther(modelTurnChips(turn("What's the name of the event?"), student))).toEqual([]);
+  });
+});
+
+describe("answering a waiting change with a soft yes", () => {
+  it("applies on 'Sounds good' and friends, only while a change waits", () => {
+    for (const text of ["Sounds good", "looks good!", "Go ahead", "Okay", "Sure.", "Yeah"]) {
+      expect(routeMessage(text, student, true).route.kind).toBe("apply");
+      expect(routeMessage(text, student, false).route.kind).toBe("model");
+    }
+    expect(routeMessage("Never mind", student, true).route.kind).toBe("decline");
+    expect(routeMessage("Okay but make it 2 hours", student, true).route.kind).toBe("model");
+    expect(routeMessage("Change it", student, true).route.kind).toBe("model");
   });
 });

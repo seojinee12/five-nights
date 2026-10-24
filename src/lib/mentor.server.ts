@@ -15,6 +15,8 @@ export type OpportunityLists = { research: Opportunity[]; projects: Opportunity[
 
 type ChatBody = {
   message: string;
+  /** The mentor's previous message, so a tapped quick reply such as "Yes" has its context. */
+  previous?: string;
   student: object;
 };
 
@@ -54,10 +56,11 @@ export async function chatWithMentor(body: ChatBody): Promise<Turn> {
     "If they say they are behind, set status to behind. If they are ahead, set status to ahead. Do not invent an hour tracker.",
     "Long-term monthly or yearly reminders go in longTermAdd only.",
     "Return JSON only: {\"reply\": string, \"patch\": object|null, \"choices\": string[]}. patch may include status, statusNote, addEvents, addTasks, courses, longTermAdd, weeklyTargets.",
-    "choices is optional: up to 4 short quick replies (under 40 characters each) the student might tap next, such as answers to a question you asked. Omit it or use [] when free text fits better.",
+    "choices: ALWAYS include 2 to 4 short quick replies (under 40 characters each, written in the student's voice) that they could plausibly tap to answer your reply. After a question, the likely answers. After a plan or suggestion, \"Sounds good\", \"Change it\" and specific alternatives. After you applied something, sensible next steps. Leave choices out (or []) only when your reply asks for something open-ended such as a name or a date. Do not add \"Something else\"; the app adds it.",
     "A small, specific change (exactly one task, one yearly goal or reminder, one weekly hour target, or one single calendar event that does not overlap any existing event) is applied immediately: the reply just says what you added and must not ask for confirmation.",
     "Anything bigger (several items, more than one event, an event that overlaps an existing one, moving or removing events, status changes, courses) is not applied until they say yes, so the reply describes it and asks them to say yes. If nothing should change, patch is null.",
     `Student: ${JSON.stringify(body.student)}`,
+    ...(body.previous ? [`You last said to them: ${body.previous.slice(0, 600)}`] : []),
     `They said: ${body.message}`,
   ].join("\n");
   const events = existingEventsOf(body.student);
@@ -190,7 +193,8 @@ function turnOf(
   const fitted = fitProposal(sanitized, events);
   const patch = fitted.patch;
   const reply = fitted.note ? `${replyText}\n\n${fitted.note}` : replyText;
-  // The model's quick replies when it gave usable ones; yes/no while a change waits; otherwise none.
+  // The model's quick replies when it gave usable ones; yes/no/change while a change waits; otherwise
+  // none here, and the panel picks a fallback for the situation (see fallbackChips).
   const chips = replyChips(rawChoices, patch !== null && size !== "small" ? defaultChips(true) : []);
   const choices = chips.map((chip) => chip.label);
   const turn: Turn = { reply: size === "small" ? reply : withAsk(reply, patch), patch, size, choices };

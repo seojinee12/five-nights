@@ -99,7 +99,7 @@ describe("the study-block demo line", () => {
     expect(turn.size).toBe("big");
     expect(turn.patch?.addEvents).toEqual(SIX);
     expect(turn.reply).toMatch(/yes/i);
-    expect(turn.choices).toEqual(["Yes, apply it", "No, leave it"]);
+    expect(turn.choices).toEqual(["Yes, apply it", "No, leave it", "Change something"]);
   });
 
   it("confirm applies all six without overlaps, and the earlier week is kept for Undo", async () => {

@@ -9,7 +9,7 @@ import {
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
-import { asChips, defaultChips, routeMessage, turnChips, type Chip } from "@/lib/mentorChips";
+import { asChips, defaultChips, fallbackChips, modelTurnChips, routeMessage, withOther, type Chip } from "@/lib/mentorChips";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunityList } from "@/components/OpportunityList";
@@ -511,7 +511,7 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
   useEffect(() => {
     if (!note || seenNote.current === note.id) return;
     seenNote.current = note.id;
-    setMsgs((current) => [...current, { me: false, text: note.text, choices: asChips(defaultChips(note.patch !== null)) }]);
+    setMsgs((current) => [...current, { me: false, text: note.text, choices: fallbackChips(note.patch !== null ? "pending" : "start", s) }]);
     setPending(note.patch);
   }, [note]);
   // Scroll the list itself: scrollIntoView would also scroll the window to the panel on narrow screens.
@@ -531,12 +531,12 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
     if (route.kind === "apply" && pending) {
       const undoId = onApplyNow(pending);
       setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change.", undoId, choices: asChips(defaultChips()) }]);
+      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change.", undoId, choices: fallbackChips("applied", s) }]);
       return;
     }
     if (route.kind === "decline") {
       setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Left the week as it is.", choices: asChips(defaultChips()) }]);
+      setMsgs((current) => [...current, { me: false, text: "Left the week as it is.", choices: fallbackChips("start", s) }]);
       return;
     }
     if (route.kind === "local") {
@@ -551,27 +551,28 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
       return;
     }
     const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
-    void mentorChat({ data: { message, student: snapshot } }).then((turn) => {
+    const previous = [...msgs].reverse().find((m) => !m.me)?.text;
+    void mentorChat({ data: { message, ...(previous ? { previous } : {}), student: snapshot } }).then((turn) => {
       if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);
         setPending(null);
-        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId, choices: turnChips(turn, defaultChips()) }]);
+        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId, choices: modelTurnChips(turn, s, true) }]);
         return;
       }
       setPending(turn.patch);
-      setMsgs((current) => [...current, { me: false, text: turn.reply, choices: turnChips(turn, turn.patch !== null ? defaultChips(true) : []) }]);
-    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: asChips(defaultChips()) }]));
+      setMsgs((current) => [...current, { me: false, text: turn.reply, choices: modelTurnChips(turn, s) }]);
+    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: fallbackChips("start", s) }]));
   };
   const undo = (index: number, id: number) => {
     const ok = onUndo(id);
     setMsgs((current) => [
       ...current.map((m, i) => (i === index ? { ...m, undoId: undefined } : m)),
-      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone.", choices: asChips(defaultChips()) },
+      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone.", choices: fallbackChips("undone", s) },
     ]);
   };
   // Only the latest assistant turn offers chips; any later message (even a typed one) retires them.
   const latest = msgs[msgs.length - 1];
-  const quick = latest && !latest.me ? (latest.choices ?? []) : [];
+  const quick = latest && !latest.me ? withOther(latest.choices ?? []) : [];
   return (
     <aside className="flex h-[calc(100vh-110px)] flex-col rounded-xl border bg-card lg:sticky lg:top-5">
       <div className="flex items-center gap-2 border-b p-3">

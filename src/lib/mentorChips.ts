@@ -19,6 +19,10 @@ export const OTHER_CHIP = "Something else";
 export const REPRIORITIZE_CHIP = "Reprioritize my week";
 const YES_CHIP = "Yes, apply it";
 const NO_CHIP = "No, leave it";
+const REVISE_CHIP = "Change something";
+export const NEXT_CHIP = "What else can I add?";
+export const SHOW_WEEK_CHIP = "Show my week";
+export const ADD_GOAL_CHIP = "Add a goal";
 const POSTPONE_PREFIX = "Postpone: ";
 
 /**
@@ -64,18 +68,16 @@ export function clip(label: string, max = MAX_CHOICE_LENGTH): string {
 }
 
 /**
- * The starters, or yes/no while a change waits. These are for terminal-like turns (the greeting,
- * "Applied.", "Undone.", a declined change, a file note, an error) and for a waiting change,
- * never for a plain free-text reply.
+ * The starters, or the yes / no / change set while a change waits. The starters are also what
+ * the greeting, a declined change, a file note and an error turn offer: those flows need no model.
  */
 export function defaultChips(pending = false): string[] {
-  return pending ? [YES_CHIP, NO_CHIP] : [AHEAD_CHIP, BEHIND_CHIP, CHANGE_CHIP];
+  return pending ? [YES_CHIP, NO_CHIP, REVISE_CHIP] : [AHEAD_CHIP, BEHIND_CHIP, CHANGE_CHIP];
 }
 
 /**
- * The model's own choices when it gave usable ones, otherwise `fallback`, which is empty unless
- * the turn is terminal-like or a change waits (see `defaultChips`). A free-text reply with no
- * choices therefore shows no chips. Server side, from the raw model output.
+ * The model's own choices when it gave usable ones, otherwise `fallback`. Server side, from the
+ * raw model output; the client fills in the situation's fallback itself (see `fallbackChips`).
  */
 export function replyChips(raw: unknown, fallback: string[] = []): Chip[] {
   const chips = sanitizeChips(raw);
@@ -85,10 +87,24 @@ export function replyChips(raw: unknown, fallback: string[] = []): Chip[] {
 /** Client side: the chips for a turn the server returned (`choices` labels, optional `choiceTexts`). */
 export function turnChips(
   turn: { choices?: unknown; choiceTexts?: unknown },
-  fallback: string[] = [],
+  fallback: string[] | Chip[] = [],
 ): Chip[] {
   const labels = sanitizeChoices(turn.choices);
-  return labels.length ? asChips(labels, turn.choiceTexts) : asChips(fallback);
+  if (labels.length) return asChips(labels, turn.choiceTexts);
+  return typeof fallback[0] === "string" ? asChips(fallback as string[]) : (fallback as Chip[]);
+}
+
+/**
+ * The chips for a reply the model returned: its own choices when it gave usable ones, otherwise the
+ * fallback for what the turn was (a change added now, a change waiting, or a plain reply).
+ */
+export function modelTurnChips(
+  turn: { reply: string; patch: unknown; choices?: unknown; choiceTexts?: unknown },
+  student: Student,
+  applied = false,
+): Chip[] {
+  const situation = applied ? "applied" : turn.patch ? "pending" : "reply";
+  return turnChips(turn, fallbackChips(situation, student, turn.reply));
 }
 
 const openTasks = (student: Student): Task[] =>
@@ -109,6 +125,81 @@ export function aheadChips(student: Student): Chip[] {
   const goal = goals.find((item) => item.horizon === "short") ?? goals[0];
   if (goal) labels.push(`Push goal: ${goal.title}`);
   return sanitizeChips([...labels.slice(0, MAX_CHOICES - 1), OTHER_CHIP]);
+}
+
+/** What the mentor just did or said, which decides the quick replies when the model gave none. */
+export type ChipSituation =
+  /** The greeting, a declined change, a file note or an error turn: the starters. */
+  | "start"
+  /** A change was applied, a small one was added, or one was undone: next steps. */
+  | "applied"
+  | "undone"
+  /** A big change is waiting for an answer. */
+  | "pending"
+  /** A plain free-text reply from the model. */
+  | "reply";
+
+// A reply whose last question asks for a name, date or time cannot be answered with a tap.
+const OPEN_ASK =
+  /\b(what(?:'s| is| was)? (?:the |your |its )?(?:name|date|time|title|number|email)|what (?:date|time|day)|which (?:date|time)|when (?:is|are|was|does|do|would)|what should i call)\b/i;
+const YES_NO_ASK =
+  /^(?:do|does|did|is|are|am|was|were|can|could|will|would|should|shall|have|has|may|might|want|need|ok|okay|sound|how about|ready|interested)\b/i;
+
+function lastQuestion(reply: string): string {
+  const text = reply.trim();
+  if (!text.endsWith("?")) return "";
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
+  return sentences[sentences.length - 1] ?? "";
+}
+
+/** True when the reply ends by asking for something typed, such as a name, date or time. */
+export function asksOpenQuestion(reply: string): boolean {
+  return OPEN_ASK.test(lastQuestion(reply));
+}
+
+/** True when the reply ends with a plain yes/no question (no "or" between options). */
+export function asksYesNo(reply: string): boolean {
+  const question = lastQuestion(reply);
+  return !!question && YES_NO_ASK.test(question) && !/\bor\b/i.test(question) && !OPEN_ASK.test(question);
+}
+
+/**
+ * Quick replies for a turn the model gave none for, chosen from what just happened. Pure. The
+ * panel adds "Something else" after these (see `withOther`).
+ * - start: ahead / behind / schedule change.
+ * - applied, undone: a next step, then up to two goals drawn from the student's current work.
+ * - pending: yes / no / change something.
+ * - reply: yes / no after a plain yes/no question; none when it asks for a name, date or time;
+ *   otherwise show the week or add a goal.
+ */
+export function fallbackChips(situation: ChipSituation, student: Student, reply = ""): Chip[] {
+  switch (situation) {
+    case "start":
+      return asChips(defaultChips());
+    case "pending":
+      return asChips(defaultChips(true));
+    case "applied":
+    case "undone": {
+      const next = situation === "applied" ? NEXT_CHIP : "Try a different change";
+      const work = aheadChips(student).filter((chip) => chip.label !== OTHER_CHIP);
+      return sanitizeChips([next, ...work.slice(0, 2).map((chip) => chip.text)]);
+    }
+    case "reply":
+      if (asksOpenQuestion(reply)) return [];
+      if (asksYesNo(reply)) return asChips(["Yes", "No"]);
+      return asChips([SHOW_WEEK_CHIP, ADD_GOAL_CHIP]);
+  }
+}
+
+/**
+ * Adds the "Something else" chip, last, to any non-empty list that is not the closed yes / no /
+ * change set. Model choices stay at four; this extra is the panel's own.
+ */
+export function withOther(chips: Chip[]): Chip[] {
+  if (!chips.length) return [];
+  if (chips.some((chip) => chip.text === YES_CHIP)) return chips;
+  const rest = chips.filter((chip) => chip.label !== OTHER_CHIP);
+  return [...rest, { label: OTHER_CHIP, text: OTHER_CHIP }];
 }
 
 /** The lowest-priority open tasks that can be moved to next week, lowest first. */
@@ -161,9 +252,13 @@ export function routeMessage(
   if (!message) return { message, route: { kind: "ignore" } };
   const plan = resolveChip(message, student, fromChip);
   if (plan.kind === "focus") return { message, route: plan };
-  if (hasPending && /^(yes|yep|apply|do it|add them|add it)\b/i.test(message))
+  if (
+    hasPending &&
+    (/^(yes|yep|yeah|apply|do it|add them|add it)\b/i.test(message) ||
+      /^(sounds good|looks good|go ahead|sure|ok|okay|perfect)[.!\s]*$/i.test(message))
+  )
     return { message, route: { kind: "apply" } };
-  if (hasPending && /^(no|nope|leave it)\b/i.test(message))
+  if (hasPending && /^(no|nope|leave it|never mind|cancel)\b/i.test(message))
     return { message, route: { kind: "decline" } };
   return { message, route: plan };
 }

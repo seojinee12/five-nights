@@ -44,10 +44,10 @@ describe("chatWithMentor choices (network mocked)", () => {
     delete process.env["GEMINI_API_KEY"];
   });
 
-  // Choice rule: a plain free-text reply with no choices shows no chips. The starters stay on
-  // terminal-like turns (greeting, applied, undone, declined, file notes) and on error turns, which
-  // end without the model; the starters are local flows that still work then. Yes/no stays while
-  // a big change waits.
+  // Choice rule: the prompt asks the model for 2-4 quick replies on every turn. When it returns none
+  // the server adds nothing for a plain reply (the panel picks a fallback for the situation, see
+  // modelTurnChips) and yes/no/change while a big change waits. Error and practice-mode turns end
+  // without the model and offer the starters, which are local flows that still work.
   it("is in practice mode with neutral wording and the starter chips when there is no key", async () => {
     const { chatWithMentor } = await load({});
     const turn = await chatWithMentor({ message: "hi", student });
@@ -137,7 +137,7 @@ describe("chatWithMentor choices (network mocked)", () => {
     expect((await chatWithMentor({ message: "hi", student })).choiceTexts).toBeUndefined();
   });
 
-  it("shows no chips when the model returns none, and yes/no while a change waits", async () => {
+  it("adds no server chips when the model returns none, and yes/no/change while a change waits", async () => {
     const { chatWithMentor } = await load({ gemini: "test-key" });
     fetchMock.mockResolvedValueOnce(json(candidate({ reply: "Okay.", patch: null })));
     expect((await chatWithMentor({ message: "hi", student })).choices).toEqual([]);
@@ -163,5 +163,19 @@ describe("chatWithMentor choices (network mocked)", () => {
     const big = await chatWithMentor({ message: "add two", student });
     expect(big.size).toBe("big");
     expect(big.choices).toEqual(defaultChips(true));
+  });
+
+  it("asks the model for 2-4 quick replies on every turn and sends its last message for context", async () => {
+    const { chatWithMentor } = await load({ gemini: "test-key" });
+    fetchMock.mockResolvedValueOnce(json(candidate({ reply: "Okay.", patch: null })));
+    await chatWithMentor({ message: "Yes", previous: "Want me to plan Friday?", student });
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    const prompt: string = body.contents[0].parts[0].text;
+    expect(prompt).toContain("ALWAYS include 2 to 4 short quick replies");
+    expect(prompt).toContain("Sounds good");
+    expect(prompt).toContain("open-ended");
+    expect(prompt).toContain('Do not add "Something else"');
+    expect(prompt).toContain("You last said to them: Want me to plan Friday?");
+    expect(prompt.indexOf("You last said")).toBeLessThan(prompt.indexOf("They said: Yes"));
   });
 });
