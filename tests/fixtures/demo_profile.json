@@ -1,0 +1,82 @@
+{
+  "_label": "EXAMPLE / DEMO DATA ONLY. This is an invented first-year student for the LaunchPad demo. It is not a real person's record and contains no real contact details.",
+  "profile": {
+    "display_name": "Seojin",
+    "focus_areas": ["academia", "career", "projects", "recovery"],
+    "persona": "demo",
+    "notes": "EXAMPLE / DEMO DATA. Goals: (1) join a UCSD research lab as a first-year helper by spring quarter, (2) land a hardware or embedded summer internship after the first year, (3) keep a 3.85 GPA while doing it. Preferences: small hands-on projects over big theory; likes working in a study group; protects sleep and one free evening a week; prefers 2 to 3 hour focused blocks; open to on-campus labs and student teams, not interested in unpaid work off campus.",
+    "class_grades": {"ECE 5": "A", "MATH 20A": "A-", "PHYS 2A": "A-"},
+    "university": "UC San Diego",
+    "school_catalog": "UCSD Jacobs School of Engineering (ECE)",
+    "year": "First year",
+    "major": "Electrical Engineering",
+    "current_classes": ["ECE 5", "MATH 20A", "PHYS 2A"],
+    "skills": ["C++ (intro level)", "Python (basic scripting)", "Circuit basics", "Arduino basics", "Git"],
+    "interests": ["Robotics and embedded systems", "Wearable and sensor hardware", "Undergraduate research"],
+    "free_hours_per_week": 22,
+    "current_gpa": null,
+    "gpa_goal": 3.85,
+    "career_goal": "A research spot or a hardware internship, without letting the courses slip"
+  },
+  "preferences": {
+    "work_style": "Short hands-on builds, 2 to 3 hour focus blocks, study group once a week",
+    "opportunity_types": ["undergraduate research", "summer internship", "student engineering team"],
+    "location": "On campus at UC San Diego, or remote for internships",
+    "protected_time": "One free evening a week and 7+ hours of sleep"
+  },
+  "goals": [
+    {"horizon": "short", "title": "Keep ECE 5, MATH 20A and PHYS 2A at A- or better this quarter"},
+    {"horizon": "short", "title": "Email two UCSD labs about first-year research help"},
+    {"horizon": "long", "title": "Start research at UCSD by spring quarter of the first year"},
+    {"horizon": "long", "title": "Secure a hardware or embedded summer internship after the first year"}
+  ],
+  "resume": {
+    "_label": "EXAMPLE resume for demo only. Entries are invented and beginner level.",
+    "name": "Seojin (example student)",
+    "contact": "EXAMPLE ONLY: no real email, phone, or address",
+    "education": [
+      {
+        "school": "UC San Diego, Jacobs School of Engineering",
+        "degree": "B.S. Electrical Engineering (in progress)",
+        "dates": "Fall 2026 to present",
+        "details": "First-year student. GPA not yet available."
+      }
+    ],
+    "coursework": [
+      "ECE 5: Introduction to Electrical and Computer Engineering (in progress)",
+      "MATH 20A: Calculus for Science and Engineering (in progress)",
+      "PHYS 2A: Physics, Mechanics (in progress)"
+    ],
+    "projects": [
+      {
+        "title": "Line-following robot (example project)",
+        "dates": "Summer 2026",
+        "bullets": [
+          "Built a two-motor robot car from a starter kit using an Arduino and two infrared sensors.",
+          "Wrote the control loop in C++ and tuned it until the robot completed a taped track.",
+          "Kept the code and wiring notes in a Git repository."
+        ]
+      },
+      {
+        "title": "Room temperature logger (example project)",
+        "dates": "Spring 2026",
+        "bullets": [
+          "Read a temperature sensor with a microcontroller and saved readings to a CSV file.",
+          "Plotted a week of data with a short Python script."
+        ]
+      }
+    ],
+    "activities": [
+      {
+        "organization": "High school robotics club (example)",
+        "role": "Member",
+        "dates": "2024 to 2026",
+        "bullets": [
+          "Helped wire and test sensors for a competition robot.",
+          "Presented a short demo of the robot at a school open house."
+        ]
+      }
+    ],
+    "skills": ["C++ (intro level)", "Python (basic scripting)", "Arduino", "Breadboard circuits", "Git"]
+  }
+}

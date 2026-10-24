@@ -126,6 +126,89 @@ UCSD_EE_CATALOG: Dict[str, UCSDCourse] = {
 }
 
 
+class UCSDOpportunity(BaseModel):
+    """A research, internship, club, project, hackathon, scholarship, or event a student can pursue."""
+    id: str = Field(description="Stable slug")
+    title: str = Field(description="Name shown to the student")
+    type: str = Field(description="research, internship, club, project, hackathon, scholarship, or event")
+    org: str = Field(default="", description="Lab, team, or office behind it")
+    summary: str = Field(default="", description="One-line description")
+    url: str = Field(default="", description="Public page")
+    tags: List[str] = Field(default_factory=list, description="Topic keywords used for matching")
+    majors: List[str] = Field(default_factory=list, description="Major keywords it suits; empty means any major")
+    min_year: int = Field(default=1, description="Earliest year it suits (1 = first year)")
+    max_year: int = Field(default=4, description="Latest year it suits")
+    beginner_friendly: bool = Field(default=True, description="Open to students with little experience")
+
+
+OPPORTUNITY_TYPES = ("research", "internship", "club", "project", "hackathon", "scholarship", "event")
+
+_ENG = ["engineering"]
+_ECE = ["electrical", "computer", "ece", "cse", "robotics"]
+_BIO = ["bioengineering", "biomedical", "biology", "bioe", "chemical"]
+
+# Curated UCSD opportunities. Pages were checked reachable when added; deadlines change, so none are stored.
+UCSD_OPPORTUNITIES: List[UCSDOpportunity] = [
+    UCSDOpportunity(id="e4e", title="Engineers for Exploration", type="project", org="Profs. Curt Schurgers and Ryan Kastner",
+        summary="Hardware, sensors, and field projects for conservation.", url="https://e4e.ucsd.edu/",
+        tags=["sensors", "hardware", "embedded systems", "field projects", "wearable", "conservation"], majors=_ECE, min_year=1, max_year=4),
+    UCSDOpportunity(id="ieee-projects", title="IEEE at UCSD quarterly projects", type="club", org="IEEE at UCSD",
+        summary="Beginner hardware teams with funded parts.", url="https://ieeeatucsd.org/",
+        tags=["hardware", "circuits", "embedded systems", "arduino", "projects", "robotics"], majors=_ECE, min_year=1, max_year=3),
+    UCSDOpportunity(id="robosub", title="Triton Robosub beginner track", type="project", org="Triton Robosub",
+        summary="Firmware and sensors for an autonomous submarine, with a mentor.", url="https://tritonrobosub.com/",
+        tags=["robotics", "firmware", "sensors", "embedded systems", "autonomous", "c++"], majors=_ECE, min_year=1, max_year=4),
+    UCSDOpportunity(id="cri", title="Contextual Robotics Institute", type="research", org="Prof. Henrik Christensen",
+        summary="Mobile robots, vision, and autonomous systems research.", url="https://contextualrobotics.ucsd.edu/",
+        tags=["robotics", "computer vision", "autonomous systems", "research", "machine learning"], majors=_ECE, min_year=2, max_year=4, beginner_friendly=False),
+    UCSDOpportunity(id="erl", title="Existential Robotics Laboratory", type="research", org="Prof. Nikolay Atanasov",
+        summary="Perception, state estimation, and mapping research.", url="https://erl.ucsd.edu/",
+        tags=["robotics", "perception", "mapping", "research", "python", "linear algebra"], majors=_ECE, min_year=2, max_year=4, beginner_friendly=False),
+    UCSDOpportunity(id="ug-research", title="UCSD Undergraduate Research Hub", type="research", org="Undergraduate Research Hub",
+        summary="Find a lab, learn how to email professors, and see research programs.", url="https://ugresearch.ucsd.edu/",
+        tags=["undergraduate research", "research", "lab", "professor"], majors=[], min_year=1, max_year=4),
+    UCSDOpportunity(id="cosman", title="Pamela Cosman Lab", type="research", org="Prof. Pamela Cosman",
+        summary="Wireless media and engineering education research.", url="https://cosman.ucsd.edu/",
+        tags=["wireless", "signal processing", "video", "research", "python"], majors=["electrical", "computer", "ece"], min_year=2, max_year=4, beginner_friendly=False),
+    UCSDOpportunity(id="sdsc-interns", title="SDSC undergraduate internships", type="internship", org="San Diego Supercomputer Center",
+        summary="On-campus internships in high-performance computing and data.", url="https://interns.sdsc.edu/",
+        tags=["data", "python", "high performance computing", "software", "cluster", "internship"], majors=["computer", "cse", "data", "electrical", "ece"], min_year=2, max_year=4),
+    UCSDOpportunity(id="hardware-intern", title="Hardware and embedded summer internships", type="internship", org="UCSD Career Center",
+        summary="Search and apply for hardware, firmware, and embedded roles with the Career Center.", url="https://career.ucsd.edu/",
+        tags=["internship", "hardware", "embedded systems", "firmware", "circuits", "summer", "industry"], majors=["electrical", "computer", "ece", "cse"], min_year=1, max_year=4),
+    UCSDOpportunity(id="swe-intern", title="Software engineering internships", type="internship", org="UCSD Career Center",
+        summary="Industry software roles, resume reviews, and interview practice.", url="https://career.ucsd.edu/",
+        tags=["internship", "software", "python", "algorithms", "industry", "web", "coding", "summer"], majors=["computer", "cse", "data", "electrical", "ece"], min_year=2, max_year=4, beginner_friendly=False),
+    UCSDOpportunity(id="biomed-intern", title="Biomedical and life-science internships", type="internship", org="UCSD Career Center",
+        summary="Medical device, biotech, and lab internships for bioengineering students.", url="https://career.ucsd.edu/",
+        tags=["internship", "biotech", "medical devices", "bioengineering", "lab", "industry", "summer"], majors=_BIO, min_year=2, max_year=4),
+    UCSDOpportunity(id="bioe-research", title="Bioengineering faculty lab research", type="research", org="Jacobs School of Engineering",
+        summary="Join a bioengineering lab through the Undergraduate Research Hub.", url="https://ugresearch.ucsd.edu/",
+        tags=["research", "bioengineering", "lab", "biology", "tissue", "genomics", "medical devices", "wet lab"], majors=_BIO, min_year=1, max_year=4),
+    UCSDOpportunity(id="acm-hack-school", title="ACM Hack School", type="club", org="ACM at UCSD",
+        summary="Learn web and software skills by building a project with a team.", url="https://hack.acmucsd.com/",
+        tags=["software", "web", "python", "coding", "projects", "git", "javascript"], majors=["computer", "cse", "data", "electrical", "ece"], min_year=1, max_year=3),
+    UCSDOpportunity(id="acm-ai", title="ACM AI", type="club", org="ACM at UCSD",
+        summary="Machine learning workshops and student projects.", url="https://ai.acmucsd.com/",
+        tags=["machine learning", "ai", "python", "data", "projects"], majors=["computer", "cse", "data", "electrical", "ece"], min_year=1, max_year=4),
+    UCSDOpportunity(id="diamondhacks", title="DiamondHacks", type="hackathon", org="ACM at UCSD",
+        summary="A beginner-friendly hackathon with mentors and workshops.", url="https://diamondhacks.acmucsd.com/",
+        tags=["hackathon", "projects", "software", "web", "coding", "teamwork", "hardware"], majors=[], min_year=1, max_year=4),
+    UCSDOpportunity(id="academic-enrichment", title="Academic Enrichment Programs", type="research", org="Academic Enrichment Programs",
+        summary="Mentored research and scholarship programs for undergraduates.", url="https://aep.ucsd.edu/",
+        tags=["undergraduate research", "research", "mentoring", "graduate school", "phd", "scholarship"], majors=[], min_year=1, max_year=4),
+    UCSDOpportunity(id="fas", title="Financial Aid and Scholarships Office", type="scholarship", org="UCSD",
+        summary="Find campus scholarships and funding for engineering students.", url="https://fas.ucsd.edu/",
+        tags=["scholarship", "funding", "financial aid", "grants"], majors=[], min_year=1, max_year=4),
+    UCSDOpportunity(id="career-events", title="Career Center events and fairs", type="event", org="UCSD Career Center",
+        summary="Career fairs, employer info sessions, and resume workshops.", url="https://career.ucsd.edu/events",
+        tags=["career fair", "networking", "resume", "internship", "industry", "employers"], majors=[], min_year=1, max_year=4),
+    UCSDOpportunity(id="qi-events", title="Qualcomm Institute talks and open houses", type="event", org="Qualcomm Institute",
+        summary="Campus talks and lab open houses on sensors, wireless, and health tech.", url="https://qi.ucsd.edu/",
+        tags=["wearable", "sensors", "wireless", "research", "networking", "medical devices", "lab"], majors=[], min_year=1, max_year=4),
+]
+
+
 class UCSDCatalogService:
     """Helper service for fetching and querying UCSD courses and 4-year plan guidance."""
 
@@ -138,6 +221,11 @@ class UCSDCatalogService:
     def get_course(code: str) -> Optional[UCSDCourse]:
         """Fetch a specific course by its code."""
         return UCSD_EE_CATALOG.get(code)
+
+    @staticmethod
+    def get_opportunities() -> List[UCSDOpportunity]:
+        """Return the curated research, internship, club, project, hackathon, scholarship, and event list."""
+        return list(UCSD_OPPORTUNITIES)
 
     @staticmethod
     def get_recommended_freshman_courses() -> List[str]:
