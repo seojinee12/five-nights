@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { calendarPrompt, eventsFromModel, parseIsoDate, type CalendarRequest } from "./calendar-gemini";
 import type { CalEvent } from "./launchpad";
+import { chipsOrDefault, defaultChips } from "./mentorChips";
 import { sanitizePatch, type Patch } from "./patch";
 import { classifyPatch, type PatchSize } from "./patchSize";
 
-export type Turn = { reply: string; patch: Patch | null; size?: PatchSize };
+export type Turn = { reply: string; patch: Patch | null; size?: PatchSize; choices?: string[] };
 export type Opportunity = { name: string; sub?: string; what: string; url: string };
 export type OpportunityLists = { research: Opportunity[]; projects: Opportunity[] };
 
@@ -48,7 +49,8 @@ export async function chatWithMentor(body: ChatBody): Promise<Turn> {
     "Weekly hour totals such as 'study 20 hours outside class' belong in weeklyTargets, not on the clock.",
     "If they say they are behind, set status to behind. If they are ahead, set status to ahead. Do not invent an hour tracker.",
     "Long-term monthly or yearly reminders go in longTermAdd only.",
-    "Return JSON only: {\"reply\": string, \"patch\": object|null}. patch may include status, statusNote, addEvents, addTasks, courses, longTermAdd, weeklyTargets.",
+    "Return JSON only: {\"reply\": string, \"patch\": object|null, \"choices\": string[]}. patch may include status, statusNote, addEvents, addTasks, courses, longTermAdd, weeklyTargets.",
+    "choices is optional: up to 4 short quick replies (under 40 characters each) the student might tap next, such as answers to a question you asked. Omit it or use [] when free text fits better.",
     "A small, specific change (exactly one task, one yearly goal or reminder, one weekly hour target, or one single calendar event that does not overlap any existing event) is applied immediately: the reply just says what you added and must not ask for confirmation.",
     "Anything bigger (several items, more than one event, an event that overlaps an existing one, moving or removing events, status changes, courses) is not applied until they say yes, so the reply describes it and asks them to say yes. If nothing should change, patch is null.",
     `Student: ${JSON.stringify(body.student)}`,
@@ -111,11 +113,11 @@ async function geminiTurnParts(parts: Record<string, unknown>[], allowSmall: boo
     const reply = result.limited
       ? "The assistant is rate-limited right now. Nothing was changed."
       : "The assistant could not finish that. Nothing was changed.";
-    return { reply, patch: null };
+    return { reply, patch: null, choices: defaultChips() };
   }
-  const parsed = jsonFrom(result.text) as { reply?: unknown; patch?: unknown } | null;
+  const parsed = jsonFrom(result.text) as { reply?: unknown; patch?: unknown; choices?: unknown } | null;
   const reply = typeof parsed?.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : result.text.trim();
-  return turnOf(reply, parsed?.patch, allowSmall, events);
+  return turnOf(reply, parsed?.patch, allowSmall, events, parsed?.choices);
 }
 
 async function geminiText(parts: Record<string, unknown>[], search: boolean): Promise<{ text: string; limited: boolean }> {
@@ -160,7 +162,7 @@ async function geminiText(parts: Record<string, unknown>[], search: boolean): Pr
 
 async function grok(prompt: string, events?: unknown[]): Promise<Turn> {
   const key = envValue("XAI_API_KEY");
-  if (!key) return { reply: "Grok is in practice mode until an xAI key is set. Nothing was changed.", patch: null };
+  if (!key) return { reply: "Grok is in practice mode until an xAI key is set. Nothing was changed.", patch: null, choices: defaultChips() };
   const response = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
@@ -175,15 +177,15 @@ async function grok(prompt: string, events?: unknown[]): Promise<Turn> {
   if (!response.ok) {
     const detail = await response.text();
     if (response.status === 401 || /api key/i.test(detail)) {
-      return { reply: "Grok is in practice mode until a valid xAI key is set. Nothing was changed.", patch: null };
+      return { reply: "Grok is in practice mode until a valid xAI key is set. Nothing was changed.", patch: null, choices: defaultChips() };
     }
-    return { reply: "Grok could not finish that. Nothing was changed.", patch: null };
+    return { reply: "Grok could not finish that. Nothing was changed.", patch: null, choices: defaultChips() };
   }
   const payload = await response.json() as { choices?: { message?: { content?: string } }[] };
   const text = payload.choices?.[0]?.message?.content ?? "";
-  const parsed = jsonFrom(text) as { reply?: unknown; patch?: unknown } | null;
+  const parsed = jsonFrom(text) as { reply?: unknown; patch?: unknown; choices?: unknown } | null;
   const reply = typeof parsed?.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : "Grok could not finish that. Nothing was changed.";
-  return turnOf(reply, parsed?.patch, true, events);
+  return turnOf(reply, parsed?.patch, true, events, parsed?.choices);
 }
 
 /**
@@ -196,10 +198,18 @@ function existingEventsOf(student: object): unknown[] | undefined {
   return Array.isArray(events) ? events : undefined;
 }
 
-function turnOf(reply: string, rawPatch: unknown, allowSmall: boolean, events?: unknown[]): Turn {
+function turnOf(
+  reply: string,
+  rawPatch: unknown,
+  allowSmall: boolean,
+  events?: unknown[],
+  rawChoices?: unknown,
+): Turn {
   const patch = sanitizePatch(rawPatch);
   const size = patch && allowSmall ? classifyPatch(rawPatch, events) : "big";
-  return { reply: size === "small" ? reply : withAsk(reply, patch), patch, size };
+  // The model's quick replies when it gave usable ones, else deterministic defaults (yes/no while a change waits).
+  const choices = chipsOrDefault(rawChoices, patch !== null && size !== "small");
+  return { reply: size === "small" ? reply : withAsk(reply, patch), patch, size, choices };
 }
 
 function withAsk(reply: string, patch: Patch | null): string {
