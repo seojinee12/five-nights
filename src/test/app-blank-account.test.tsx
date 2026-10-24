@@ -10,6 +10,7 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { sourceOpportunities } from "@/lib/mentor.functions";
 import { Route as AppRoute } from "@/routes/app";
 
 vi.mock("@/lib/mentor.functions", () => ({
@@ -38,6 +39,7 @@ async function renderApp(u: string) {
   });
   render(<RouterProvider router={router} />);
   await waitFor(() => expect(screen.getByText(/Welcome,/)).toBeInTheDocument());
+  return router;
 }
 
 describe("/app?u=me", () => {
@@ -87,5 +89,55 @@ describe("/app?u=me", () => {
     await renderApp("seojin");
     fireEvent.click(screen.getByRole("button", { name: "Academics" }));
     expect(document.body.textContent).toContain("MATH 20A");
+  });
+
+  it("shows an empty week, a plain mentor greeting and no catalog link for a non-EE major", async () => {
+    localStorage.setItem("lp-profile", JSON.stringify({ name: "Bea", major: "Bioengineering" }));
+    await renderApp("me");
+    expect(document.querySelectorAll("div[title] > b")).toHaveLength(0);
+    expect(document.body.textContent).toContain("Hi Bea! I'm Grok.");
+    fireEvent.click(screen.getByRole("button", { name: "Academics" }));
+    expect(screen.queryByText(/UCSD ECE catalog/)).not.toBeInTheDocument();
+  });
+
+  it("starts blank with no stored profile", async () => {
+    localStorage.clear();
+    await renderApp("me");
+    expect(screen.getByText("Welcome, Engineer")).toBeInTheDocument();
+    expect(document.body.textContent).toContain("Engineering");
+    expect(document.body.textContent).not.toContain("MATH 20A");
+    expect(document.querySelectorAll("div[title] > b")).toHaveLength(0);
+  });
+
+  it("treats an unknown account id as a blank account, not Seojin", async () => {
+    await renderApp("someone-new");
+    expect(screen.getByText("Welcome, Ada")).toBeInTheDocument();
+    expect(document.body.textContent).toContain("Fresh start.");
+    for (const needle of DEMO_STRINGS) expect(document.body.textContent).not.toContain(needle);
+  });
+
+  it("leaves no demo state behind when moving from a demo student to a new account", async () => {
+    const router = await renderApp("seojin");
+    expect(document.body.textContent).toContain("Welcome, Seojin");
+    expect(document.querySelectorAll("div[title] > b").length).toBeGreaterThan(0);
+    await router.navigate({ to: "/app", search: { u: "me" } } as never);
+    await waitFor(() => expect(screen.getByText("Welcome, Ada")).toBeInTheDocument());
+    expect(document.querySelectorAll("div[title] > b")).toHaveLength(0);
+    for (const needle of DEMO_STRINGS) expect(document.body.textContent).not.toContain(needle);
+  });
+
+  it("asks for live opportunities by the new account's major, and by default for the demos", async () => {
+    const ask = vi.mocked(sourceOpportunities);
+    ask.mockClear();
+    await renderApp("me");
+    fireEvent.click(screen.getByRole("button", { name: "Opportunities" }));
+    await waitFor(() => expect(ask).toHaveBeenCalled());
+    expect(ask).toHaveBeenLastCalledWith({ data: { major: "Computer Engineering" } });
+    cleanup();
+    ask.mockClear();
+    await renderApp("seojin");
+    fireEvent.click(screen.getByRole("button", { name: "Opportunities" }));
+    await waitFor(() => expect(ask).toHaveBeenCalled());
+    expect(ask).toHaveBeenLastCalledWith(undefined);
   });
 });

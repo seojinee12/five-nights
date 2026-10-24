@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Rocket, Upload, CalendarPlus, Send, AlertTriangle, ExternalLink, Check, Paperclip, Plus, Pin, MoreHorizontal, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  STUDENTS, SEOJIN, blankStudent, parseProfile, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
+  STUDENTS, blankStudent, parseProfile, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
   type Student, type Category, type Task, type Course, type Reminder,
 } from "@/lib/launchpad";
 import { importCalendarFile } from "@/lib/calendar-import";
@@ -32,14 +32,22 @@ const TABS = ["Scheduler", "Working on", "Academics", "Opportunities", "Long-ter
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const CAT_LABEL: Record<Category, string> = { academic: "Academic", career: "Career", project: "Project", fun: "Personal" };
 
+const isDemoId = (u: string) => STUDENTS.some((s) => s.id === u);
+
+/** Keyed by the account, so switching accounts never carries one account's state into the next. */
 function AppPage() {
   const { u } = Route.useSearch();
+  return <AppView key={u} u={u} />;
+}
+
+function AppView({ u }: { u: string }) {
+  // Only the three demo students show demo data. Every other account starts blank.
   const [custom, setCustom] = useState<Student | null>(null);
   useEffect(() => {
-    if (u !== "me") return;
+    if (isDemoId(u)) return;
     setCustom(blankStudent(parseProfile(localStorage.getItem("lp-profile"))));
   }, [u]);
-  const base = u === "me" ? custom : STUDENTS.find((s) => s.id === u) ?? SEOJIN;
+  const base = isDemoId(u) ? STUDENTS.find((s) => s.id === u)! : custom;
   const [student, setStudent] = useState<Student | null>(() => (base ? structuredClone(base) : null));
   const [note, setNote] = useState<{ id: number; text: string; patch: Patch | null } | null>(null);
   const studentRef = useRef<Student | null>(null);
@@ -358,7 +366,9 @@ function Academics({ s, onSyllabus, onChange }: { s: Student; onSyllabus: () => 
           {s.courses.map((course) => <CourseBlock key={course.code} course={course} onChange={save} />)}
           {!s.courses.length && <li className="py-3 text-sm text-muted-foreground">No courses yet.</li>}
         </ul>
-        <a href="https://catalog.ucsd.edu/curric/ECE.html" target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline">UCSD ECE catalog <ExternalLink className="h-3 w-3" /></a>
+        {/electrical|computer/i.test(s.major) && (
+          <a href="https://catalog.ucsd.edu/curric/ECE.html" target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline">UCSD ECE catalog <ExternalLink className="h-3 w-3" /></a>
+        )}
       </section>
     </div>
   );
@@ -417,7 +427,7 @@ function Opportunities({ s }: { s: Student }) {
   const [research, setResearch] = useState(RESEARCH);
   const [projects, setProjects] = useState(PROJECTS);
   useEffect(() => {
-    sourceOpportunities()
+    sourceOpportunities(s.id === "me" ? { data: { major: s.major } } : undefined)
       .then((lists) => {
         if (!lists) return;
         if (lists.research.length)
@@ -432,7 +442,7 @@ function Opportunities({ s }: { s: Student }) {
         if (lists.projects.length) setProjects(lists.projects);
       })
       .catch(() => undefined);
-  }, []);
+  }, [s.id, s.major]);
   const ranked = useMemo(
     () =>
       rankSourced(
