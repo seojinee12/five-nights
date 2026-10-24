@@ -5,7 +5,7 @@ import {
   STUDENTS, SEOJIN, sortTasks, findGaps, fmt, timeUse, DAY_START, DAY_END, RESEARCH, PROJECTS,
   type Student, type Category, type Task, type Course, type Reminder,
 } from "@/lib/launchpad";
-import { parseCalendar } from "@/lib/calendar";
+import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 
@@ -53,7 +53,7 @@ function AppPage() {
 
   const tell = (text: string, patch: Patch | null) => setNote({ id: Date.now(), text, patch });
   const onCalendarFile = async (file: File) => {
-    const events = await parseCalendar(new Uint8Array(await file.arrayBuffer()), file.name);
+    const events = await importCalendarFile(file);
     const lines = events.slice(0, 8).map((event) => `${DAYS[event.day]} ${fmt(event.start)}–${fmt(event.end)} ${event.title}`);
     tell(
       events.length
@@ -101,7 +101,7 @@ function AppPage() {
         </div>
       </header>
 
-      <input ref={calRef} hidden type="file" accept=".ics,.zip,text/calendar,application/zip" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void onCalendarFile(file); }} />
+      <input ref={calRef} hidden type="file" accept=".ics,.zip,.pdf,.png,.jpg,.jpeg,.txt,text/calendar,application/zip,application/pdf,image/*,text/plain" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void onCalendarFile(file); }} />
       <input ref={sylRef} hidden type="file" accept=".pdf,.txt,.md,application/pdf,text/plain" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void onSyllabusFile(file); }} />
       <div className="mx-auto grid max-w-[1400px] gap-5 px-5 py-6 lg:grid-cols-[1fr_340px]">
         <main className="min-w-0 space-y-5">

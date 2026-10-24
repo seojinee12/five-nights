@@ -13,8 +13,13 @@ export function mondayOf(date: Date): Date {
   return local;
 }
 
+/** The calendar text(s) inside an uploaded file: one per .ics in a zip, or the file itself. */
+export async function calendarTexts(bytes: Uint8Array, filename: string): Promise<string[]> {
+  return filename.toLowerCase().endsWith(".zip") || isZip(bytes) ? icsTextsFromZip(bytes) : [new TextDecoder().decode(bytes)];
+}
+
 export async function parseCalendar(bytes: Uint8Array, filename: string, weekMonday = mondayOf(new Date())): Promise<CalEvent[]> {
-  const texts = filename.toLowerCase().endsWith(".zip") || isZip(bytes) ? await icsTextsFromZip(bytes) : [new TextDecoder().decode(bytes)];
+  const texts = await calendarTexts(bytes, filename);
   const events: CalEvent[] = [];
   const seen = new Set<string>();
   for (const text of texts) {
@@ -83,7 +88,7 @@ function eventsFromIcs(text: string, weekMonday: Date): CalEvent[] {
     const end = stamp(fields.get("DTEND"));
     if (!start || !end || start.allDay || end.allDay) continue;
     const title = (fields.get("SUMMARY") || "Busy").replace(/\\n/g, " ").replace(/\\,/g, ",").trim();
-    const kind = CLASS_RE.test(title) ? "class" : LIFE_RE.test(title) ? "life" : "task";
+    const kind = classifyTitle(title);
     const span = end.ms - start.ms;
     const hours = span > 0 ? span / 3_600_000 : 1;
     const rule = fields.get("RRULE") || "";
@@ -104,7 +109,13 @@ function eventsFromIcs(text: string, weekMonday: Date): CalEvent[] {
   return out.filter((event): event is CalEvent => event !== null);
 }
 
-function clip(day: number, start: number, end: number, title: string, kind: CalEvent["kind"]): CalEvent | null {
+/** Best-guess event kind from its title. */
+export function classifyTitle(title: string): CalEvent["kind"] {
+  return CLASS_RE.test(title) ? "class" : LIFE_RE.test(title) ? "life" : "task";
+}
+
+/** Clamp an event to the visible day; null when too short or on an invalid day. */
+export function clip(day: number, start: number, end: number, title: string, kind: CalEvent["kind"]): CalEvent | null {
   const a = Math.max(DAY_START, start);
   const b = Math.min(DAY_END, end);
   if (b - a < 0.15 || day < 0 || day > 6) return null;

@@ -330,56 +330,8 @@ export const STUDENTS: Student[] = [
   },
 ];
 
-const CAT_ORDER_DEFAULT: Category[] = ["academic", "career", "project", "fun"];
-
-/** Highest explicit priority first, then category order from the student's focus. */
-export function sortTasks(tasks: Task[], focus: Category[] = CAT_ORDER_DEFAULT): Task[] {
-  const p = (t: Task) => (t.priority === "highest" ? 0 : t.priority === "high" ? 1 : t.priority === "low" ? 3 : 2);
-  return [...tasks].sort((a, b) => p(a) - p(b) || focus.indexOf(a.category) - focus.indexOf(b.category));
-}
-
-export interface Gap { day: number; start: number; end: number; type: "free" | "pseudo" | "lazy" }
-
-export const DAY_START = 6;
-export const DAY_END = 23;
-
-/**
- * Finds empty time per day. Gaps under 30 min that sit between two classes are
- * "pseudo free" (walking/transition time). Gaps of 2h+ on a "behind" student's
- * weekday are flagged "lazy" — unused time that should go to catch-up work.
- */
-export function findGaps(events: CalEvent[], status: Status): Gap[] {
-  const gaps: Gap[] = [];
-  for (let d = 0; d < 7; d++) {
-    const ev = events.filter((e) => e.day === d).sort((a, b) => a.start - b.start);
-    let cursor = DAY_START;
-    let prev: CalEvent | null = null;
-    for (const e of [...ev, null]) {
-      const s = e ? e.start : DAY_END;
-      const len = s - cursor;
-      if (len >= 0.15) {
-        const between = prev?.kind === "class" && e?.kind === "class";
-        let type: Gap["type"] = between && len < 0.5 ? "pseudo" : "free";
-        const beforeFirst = !prev;
-        if (type === "free" && !beforeFirst && status === "behind" && len >= 2 && d < 5) type = "lazy";
-        if (len >= 0.15 && (type !== "free" || len >= 0.5)) gaps.push({ day: d, start: cursor, end: s, type });
-      }
-      if (e) { cursor = Math.max(cursor, e.end); prev = e; }
-    }
-  }
-  return gaps;
-}
-
-/** Hours already on the clock for a goal, hours to move if off task, and open time left. */
-export function timeUse(events: CalEvent[], gaps: Gap[]) {
-  const span = (items: CalEvent[]) => items.reduce((sum, event) => sum + Math.max(0, event.end - event.start), 0);
-  const gapHours = (type: Gap["type"]) => gaps.filter((gap) => gap.type === type).reduce((sum, gap) => sum + gap.end - gap.start, 0);
-  return {
-    allocated: span(events.filter((event) => event.kind !== "life")),
-    reallocate: span(events.filter((event) => event.kind === "life")) + gapHours("lazy"),
-    recompensate: gapHours("free"),
-  };
-}
+export { DAY_START, DAY_END, sortTasks, dueRank, findGaps, timeUse } from "./schedule";
+export type { Gap } from "./schedule";
 
 export const fmt = (h: number) => {
   const hr = Math.floor(h), m = Math.round((h - hr) * 60);
