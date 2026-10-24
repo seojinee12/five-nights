@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { OpportunitiesHeading, OpportunityList } from "./OpportunityList";
 import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
@@ -47,16 +47,25 @@ describe("OpportunityList", () => {
 });
 
 describe("OpportunitiesHeading", () => {
-  it("has a labelled, focusable info icon and a scoring disclosure that is closed by default", () => {
+  it("has a labelled, focusable info icon next to the heading", () => {
     render(<OpportunitiesHeading />);
     expect(screen.getByRole("heading", { name: "Best fits for you" })).toBeInTheDocument();
-    const icon = screen.getByRole("button", { name: "How is this scored?" });
+    const icon = screen.getByLabelText("How is this scored?");
+    expect(icon.tagName).toBe("BUTTON");
     icon.focus();
     expect(icon).toHaveFocus();
-    const details = document.querySelector("details")!;
-    expect(details).not.toHaveAttribute("open");
-    expect(within(details).getByText("How is this scored?").tagName).toBe("SUMMARY");
-    expect(screen.getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("keeps the fuller description closed until the trigger is clicked", () => {
+    render(<OpportunitiesHeading />);
+    const trigger = screen.getByText("How is this scored?");
+    expect(trigger.tagName).toBe("BUTTON");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    const closed = screen.queryByTestId("scoring-explainer");
+    expect(closed?.textContent ?? "").toBe("");
+    expect(closed).not.toHaveTextContent("up to");
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
     const text = screen.getByTestId("scoring-explainer").textContent ?? "";
     for (const f of SCORING_EXPLAINER.factors) expect(text).toContain(`up to ${f.points}`);
     expect(text).toContain(SCORING_EXPLAINER.reductions.text);

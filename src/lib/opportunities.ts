@@ -83,8 +83,7 @@ const LEVEL_POINTS = 10;
  * point constants above so the numbers shown to students can't drift from the ranking.
  */
 export const SCORING_EXPLAINER = {
-  short:
-    "Out of 100, based on how well it fits your interests and goals (the biggest part), your year, the kind of opportunity you want, your major, and beginner fit.",
+  short: "Out of 100, based on how well it fits your interests, goals, year and major.",
   intro: "Each opportunity gets a score from 0 to 100, highest first. The points add up:",
   factors: [
     {

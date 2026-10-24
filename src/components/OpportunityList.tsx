@@ -1,4 +1,5 @@
 import { Info } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
 
@@ -10,52 +11,52 @@ const FOCUS_CLASS =
 export function OpportunitiesHeading() {
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="relative">
-        <div className="flex min-h-6 items-center gap-1.5 pr-40">
-          <h2 className="font-semibold">Best fits for you</h2>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="How is this scored?"
-                className={`-m-1 inline-flex p-1 text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
-              >
-                <Info className="size-3.5" aria-hidden="true" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent className={TIP_CLASS}>{SCORING_EXPLAINER.short}</TooltipContent>
-          </Tooltip>
-        </div>
-        <details>
-          <summary
-            className={`absolute right-0 top-0 flex h-6 cursor-pointer list-none items-center text-xs text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden ${FOCUS_CLASS}`}
+      <Collapsible>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex items-center gap-1.5">
+            <h2 className="font-semibold">Best fits for you</h2>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="How is this scored?"
+                  className={`-m-1 inline-flex p-1 text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
+                >
+                  <Info className="size-3.5" aria-hidden="true" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className={TIP_CLASS}>{SCORING_EXPLAINER.short}</TooltipContent>
+            </Tooltip>
+          </div>
+          <CollapsibleTrigger
+            className={`text-xs text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
           >
             How is this scored?
-          </summary>
-          <div
-            data-testid="scoring-explainer"
-            className="mt-2 space-y-1.5 border-l pl-3 text-xs text-muted-foreground"
-          >
-            <p>{SCORING_EXPLAINER.intro}</p>
-            <ul className="space-y-1">
-              {SCORING_EXPLAINER.factors.map((f) => (
-                <li key={f.label}>
-                  <span className="font-medium text-foreground">
-                    {f.label} (up to {f.points}):
-                  </span>{" "}
-                  {f.text}
-                </li>
-              ))}
-              <li>
+          </CollapsibleTrigger>
+        </div>
+        <CollapsibleContent
+          data-testid="scoring-explainer"
+          className="mt-2 space-y-1.5 border-l pl-3 text-xs text-muted-foreground"
+        >
+          <p>{SCORING_EXPLAINER.intro}</p>
+          <ul className="space-y-1">
+            {SCORING_EXPLAINER.factors.map((f) => (
+              <li key={f.label}>
                 <span className="font-medium text-foreground">
-                  {SCORING_EXPLAINER.reductions.label}:
+                  {f.label} (up to {f.points}):
                 </span>{" "}
-                {SCORING_EXPLAINER.reductions.text}
+                {f.text}
               </li>
-            </ul>
-          </div>
-        </details>
-      </div>
+            ))}
+            <li>
+              <span className="font-medium text-foreground">
+                {SCORING_EXPLAINER.reductions.label}:
+              </span>{" "}
+              {SCORING_EXPLAINER.reductions.text}
+            </li>
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
     </TooltipProvider>
   );
 }

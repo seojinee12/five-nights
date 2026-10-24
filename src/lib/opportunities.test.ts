@@ -392,9 +392,9 @@ describe("SCORING_EXPLAINER", () => {
     for (const n of points) expect(full).toContain(`up to ${n}`);
   });
 
-  it("keeps the short copy to one plain sentence that names the criteria, without numbers", () => {
+  it("keeps the short copy to one plain sentence that names the main criteria, without numbers", () => {
     expect(short.replace("Out of 100", "")).not.toMatch(/\d|·|\[/);
-    for (const word of ["interests", "goals", "year", "kind", "major", "beginner"]) {
+    for (const word of ["interests", "goals", "year", "major"]) {
       expect(short).toContain(word);
     }
     expect(short.match(/\./g)).toHaveLength(1);
