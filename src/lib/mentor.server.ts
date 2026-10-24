@@ -2,17 +2,22 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { dropExcluded, findMorePrompt, type FindMoreInput } from "./findMore";
 import { calendarPrompt, eventsFromModel, parseIsoDate, type CalendarRequest } from "./calendar-gemini";
-import type { CalEvent } from "./launchpad";
+import { fitEvents } from "./eventFit";
+import { fmt, type CalEvent } from "./launchpad";
+import { defaultChips, replyChips } from "./mentorChips";
 import { sanitizePatch, type Patch } from "./patch";
 import { classifyPatch, type PatchSize } from "./patchSize";
+import { DAY_END, DAY_START } from "./schedule";
 
-export type Turn = { reply: string; patch: Patch | null; size?: PatchSize };
+/** `choices` are the chip labels (at most 40 characters); `choiceTexts` is the full text per label, set only when a label was cut. */
+export type Turn = { reply: string; patch: Patch | null; size?: PatchSize; choices?: string[]; choiceTexts?: string[] };
 export type Opportunity = { name: string; sub?: string; what: string; url: string };
 export type OpportunityLists = { research: Opportunity[]; projects: Opportunity[] };
 
 type ChatBody = {
-  model: "Gemini" | "Grok";
   message: string;
+  /** The mentor's previous message, so a tapped quick reply such as "Yes" has its context. */
+  previous?: string;
   student: object;
 };
 
@@ -45,18 +50,21 @@ export async function chatWithMentor(body: ChatBody): Promise<Turn> {
   const prompt = [
     "You are the LaunchPad mentor. The student maximizes productivity. Academia and career come before projects and personal life unless they set an explicit priority.",
     "Free time can hold work. The ten minutes between classes is pseudo-free transition time and must stay empty. A short gap that is not a transition is still free.",
-    "Timed work becomes addEvents (day 0=Mon, start/end as hours, kind class|task|life). Untimed work such as the gym becomes addTasks with timed false.",
+    "Timed work becomes addEvents. Each event is {day, start, end, title, kind}: day is an integer 0-6 (0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun, so weekdays are 0-4), start and end are numbers of hours on a 24-hour clock (13.5 means 1:30pm) with end after start, title is short, kind is class|task|life (study blocks are task).",
+    `Events must sit inside the day window ${DAY_START} to ${DAY_END}, must not overlap anything in Student.events or each other, and need the ten-minute transition after a class left empty: choose free gaps. Several requested blocks (such as one per weekday plus a weekend one) all go in one addEvents list, one event each, with exact lengths.`,
+    "Untimed work such as the gym becomes addTasks with timed false.",
     "Weekly hour totals such as 'study 20 hours outside class' belong in weeklyTargets, not on the clock.",
     "If they say they are behind, set status to behind. If they are ahead, set status to ahead. Do not invent an hour tracker.",
     "Long-term monthly or yearly reminders go in longTermAdd only.",
-    "Return JSON only: {\"reply\": string, \"patch\": object|null}. patch may include status, statusNote, addEvents, addTasks, courses, longTermAdd, weeklyTargets.",
+    "Return JSON only: {\"reply\": string, \"patch\": object|null, \"choices\": string[]}. patch may include status, statusNote, addEvents, addTasks, courses, longTermAdd, weeklyTargets.",
+    "choices: ALWAYS include 2 to 4 short quick replies (under 40 characters each, written in the student's voice) that they could plausibly tap to answer your reply. After a question, the likely answers. After a plan or suggestion, \"Sounds good\", \"Change it\" and specific alternatives. After you applied something, sensible next steps. Leave choices out (or []) only when your reply asks for something open-ended such as a name or a date. Do not add \"Something else\"; the app adds it.",
     "A small, specific change (exactly one task, one yearly goal or reminder, one weekly hour target, or one single calendar event that does not overlap any existing event) is applied immediately: the reply just says what you added and must not ask for confirmation.",
     "Anything bigger (several items, more than one event, an event that overlaps an existing one, moving or removing events, status changes, courses) is not applied until they say yes, so the reply describes it and asks them to say yes. If nothing should change, patch is null.",
     `Student: ${JSON.stringify(body.student)}`,
+    ...(body.previous ? [`You last said to them: ${body.previous.slice(0, 600)}`] : []),
     `They said: ${body.message}`,
   ].join("\n");
   const events = existingEventsOf(body.student);
-  if (body.model === "Grok") return grok(prompt, events);
   return geminiTurnParts([{ text: prompt }], true, events);
 }
 
@@ -124,19 +132,24 @@ export async function findMoreOpportunities(input: FindMoreInput): Promise<Oppor
 async function geminiTurnParts(parts: Record<string, unknown>[], allowSmall: boolean, events?: unknown[]): Promise<Turn> {
   const result = await geminiText(parts, false);
   if (!result.text) {
-    const reply = result.limited
-      ? "The assistant is rate-limited right now. Nothing was changed."
-      : "The assistant could not finish that. Nothing was changed.";
-    return { reply, patch: null };
+    const reply = result.practice
+      ? "The assistant is in practice mode until its key is set. Nothing was changed."
+      : result.limited
+        ? "The assistant is rate-limited right now. Nothing was changed."
+        : "The assistant could not finish that. Nothing was changed.";
+    return { reply, patch: null, choices: defaultChips() };
   }
-  const parsed = jsonFrom(result.text) as { reply?: unknown; patch?: unknown } | null;
+  const parsed = jsonFrom(result.text) as { reply?: unknown; patch?: unknown; choices?: unknown } | null;
   const reply = typeof parsed?.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : result.text.trim();
-  return turnOf(reply, parsed?.patch, allowSmall, events);
+  return turnOf(reply, parsed?.patch, allowSmall, events, parsed?.choices);
 }
 
-async function geminiText(parts: Record<string, unknown>[], search: boolean): Promise<{ text: string; limited: boolean }> {
+async function geminiText(
+  parts: Record<string, unknown>[],
+  search: boolean,
+): Promise<{ text: string; limited: boolean; practice?: boolean }> {
   const key = envValue("GEMINI_API_KEY");
-  if (!key) return { text: "", limited: false };
+  if (!key) return { text: "", limited: false, practice: true };
   const tools = search ? [[{ google_search: {} }], [{ googleSearch: {} }]] : [[]];
   let limited = false;
   for (const tool of tools) {
@@ -174,34 +187,6 @@ async function geminiText(parts: Record<string, unknown>[], search: boolean): Pr
   return { text: "", limited };
 }
 
-async function grok(prompt: string, events?: unknown[]): Promise<Turn> {
-  const key = envValue("XAI_API_KEY");
-  if (!key) return { reply: "Grok is in practice mode until an xAI key is set. Nothing was changed.", patch: null };
-  const response = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: "grok-4.7",
-      temperature: 0.3,
-      reasoning_effort: "low",
-      response_format: { type: "json_object" },
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    if (response.status === 401 || /api key/i.test(detail)) {
-      return { reply: "Grok is in practice mode until a valid xAI key is set. Nothing was changed.", patch: null };
-    }
-    return { reply: "Grok could not finish that. Nothing was changed.", patch: null };
-  }
-  const payload = await response.json() as { choices?: { message?: { content?: string } }[] };
-  const text = payload.choices?.[0]?.message?.content ?? "";
-  const parsed = jsonFrom(text) as { reply?: unknown; patch?: unknown } | null;
-  const reply = typeof parsed?.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : "Grok could not finish that. Nothing was changed.";
-  return turnOf(reply, parsed?.patch, true, events);
-}
-
 /**
  * The client sends its current events with the chat request. The server uses them
  * for the "does the new event overlap?" check; missing events mean no event can be
@@ -212,10 +197,53 @@ function existingEventsOf(student: object): unknown[] | undefined {
   return Array.isArray(events) ? events : undefined;
 }
 
-function turnOf(reply: string, rawPatch: unknown, allowSmall: boolean, events?: unknown[]): Turn {
-  const patch = sanitizePatch(rawPatch);
-  const size = patch && allowSmall ? classifyPatch(rawPatch, events) : "big";
-  return { reply: size === "small" ? reply : withAsk(reply, patch), patch, size };
+function turnOf(
+  replyText: string,
+  rawPatch: unknown,
+  allowSmall: boolean,
+  events?: unknown[],
+  rawChoices?: unknown,
+): Turn {
+  const sanitized = sanitizePatch(rawPatch);
+  const size = sanitized && allowSmall ? classifyPatch(rawPatch, events) : "big";
+  const fitted = fitProposal(sanitized, events);
+  const patch = fitted.patch;
+  const reply = fitted.note ? `${replyText}\n\n${fitted.note}` : replyText;
+  // The model's quick replies when it gave usable ones; yes/no/change while a change waits; otherwise
+  // none here, and the panel picks a fallback for the situation (see fallbackChips).
+  const chips = replyChips(rawChoices, patch !== null && size !== "small" ? defaultChips(true) : []);
+  const choices = chips.map((chip) => chip.label);
+  const turn: Turn = { reply: size === "small" ? reply : withAsk(reply, patch), patch, size, choices };
+  if (chips.some((chip) => chip.text !== chip.label)) turn.choiceTexts = chips.map((chip) => chip.text);
+  return turn;
+}
+
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const slot = (event: CalEvent) => `${DAY_NAMES[event.day] ?? ""} ${fmt(event.start)}-${fmt(event.end)}`;
+
+/**
+ * New events must not overlap the week or each other. The model's overlapping ones are moved to the
+ * nearest free gap on the same day, or left out when no gap is long enough, and the reply says so.
+ * Without the client's events nothing can be checked, so the patch is returned as it is.
+ */
+function fitProposal(patch: Patch | null, events?: unknown[]): { patch: Patch | null; note: string } {
+  if (!patch?.addEvents || !events) return { patch, note: "" };
+  const existing = events.filter(isEvent);
+  const { events: fitted, moved, dropped } = fitEvents(existing, patch.addEvents);
+  if (!moved.length && !dropped.length) return { patch, note: "" };
+  const next: Patch = { ...patch };
+  if (fitted.length) next.addEvents = fitted;
+  else delete next.addEvents;
+  const lines = [
+    ...moved.map(({ from, to }) => `I moved "${to.title}" from ${slot(from)} to ${slot(to)} to avoid a clash.`),
+    ...dropped.map((event) => `I left out "${event.title}" (${slot(event)}) because there is no free gap that long that day.`),
+  ];
+  return { patch: Object.keys(next).length ? next : null, note: lines.join(" ") };
+}
+
+function isEvent(value: unknown): value is CalEvent {
+  const row = value as Partial<CalEvent> | null;
+  return !!row && typeof row.day === "number" && typeof row.start === "number" && typeof row.end === "number" && row.end > row.start;
 }
 
 function withAsk(reply: string, patch: Patch | null): string {

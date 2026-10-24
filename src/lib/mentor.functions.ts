@@ -2,11 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { parseFindMoreInput } from "./findMore";
 import { CalendarRequestSchema } from "./calendar-gemini";
 import type { CalEvent } from "./launchpad";
+import { defaultChips } from "./mentorChips";
 import type { Turn, OpportunityLists } from "./mentor.server";
 
 type ChatBody = {
-  model: "Gemini" | "Grok";
   message: string;
+  previous?: string;
   student: {
     name: string;
     major: string;
@@ -31,7 +32,7 @@ export const mentorChat = createServerFn({ method: "POST" })
       return await chatWithMentor(data);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Mentor failed";
-      return { reply: `The assistant could not finish that. ${message} Nothing was changed.`, patch: null };
+      return { reply: `The assistant could not finish that. ${message} Nothing was changed.`, patch: null, choices: defaultChips() };
     }
   });
 

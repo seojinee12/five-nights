@@ -1,3 +1,4 @@
+import { fitEvents } from "./eventFit";
 import type { CalEvent, Category, Status, Student, Task } from "./launchpad";
 
 export type Patch = {
@@ -8,7 +9,12 @@ export type Patch = {
   courses?: Student["courses"];
   longTermAdd?: string[];
   weeklyTargets?: Student["weeklyTargets"];
+  /** Task ids moved to next week. Built only by the postpone chips; sanitizePatch never returns it. */
+  postpone?: string[];
 };
+
+/** The due text a postponed task gets. */
+export const POSTPONED_DUE = "Next week";
 
 const STATUSES: Status[] = ["on-track", "behind", "ahead"];
 const CATEGORIES: Category[] = ["academic", "career", "project", "fun"];
@@ -46,12 +52,21 @@ export function applyPatch(student: Student, patch: Patch): Student {
   };
   if (patch.status) next.status = patch.status;
   if (patch.statusNote) next.statusNote = patch.statusNote;
+  // Exact repeats are skipped; the rest are fitted into free time (shifted or, if no gap is long enough, left out).
+  const same = (a: CalEvent, b: CalEvent) => a.day === b.day && a.start === b.start && a.end === b.end && a.title === b.title;
+  const fresh: CalEvent[] = [];
   for (const event of patch.addEvents ?? []) {
-    const exists = next.events.some((item) => item.day === event.day && item.start === event.start && item.end === event.end && item.title === event.title);
-    if (!exists) next.events.push(event);
+    if (![...next.events, ...fresh].some((item) => same(item, event))) fresh.push(event);
   }
+  next.events.push(...fitEvents(next.events, fresh).events);
   for (const task of patch.addTasks ?? []) {
     if (!next.tasks.some((item) => item.title === task.title)) next.tasks.push(task);
+  }
+  if (patch.postpone?.length) {
+    const ids = new Set(patch.postpone);
+    next.tasks = next.tasks.map((task) =>
+      ids.has(task.id) ? { ...task, due: POSTPONED_DUE } : task,
+    );
   }
   if (patch.courses) next.courses = mergeCourses(next.courses, patch.courses);
   for (const goal of patch.longTermAdd ?? []) {

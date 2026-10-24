@@ -9,6 +9,7 @@ import {
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
+import { asChips, defaultChips, fallbackChips, focusAfterChipClick, modelTurnChips, routeMessage, trackRequest, withOther, type Chip } from "@/lib/mentorChips";
 import { findMoreOpportunities, mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { findMoreOutcome } from "@/lib/findMore";
 import { useTransientMessage } from "@/lib/useTransientMessage";
@@ -148,7 +149,7 @@ function AppPage() {
           {tab === "Opportunities" && <Opportunities s={student} />}
           {tab === "Long-term" && <LongTerm s={student} onChange={edit} />}
         </main>
-        <Assistant s={student} note={note} onApply={(patch) => setStudent((current) => current ? applyPatch(current, patch) : current)} onApplyNow={applyNow} onUndo={undoApplied} onFile={(file) => void onSyllabusFile(file)} />
+        <Assistant s={student} note={note} onApplyNow={applyNow} onUndo={undoApplied} onFile={(file) => void onSyllabusFile(file)} />
       </div>
     </div>
   );
@@ -541,81 +542,138 @@ function GoalColumn({ title, items, onEdit, onAdd }: { title: string; items: Rem
   );
 }
 
-type Msg = { me: boolean; text: string; undoId?: number | undefined };
+type Msg = { me: boolean; text: string; undoId?: number | undefined; choices?: Chip[] };
 
-function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Student; note: { id: number; text: string; patch: Patch | null } | null; onApply: (patch: Patch) => void; onApplyNow: (patch: Patch) => number; onUndo: (id: number) => boolean; onFile: (file: File) => void }) {
+function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: { id: number; text: string; patch: Patch | null } | null; onApplyNow: (patch: Patch) => number; onUndo: (id: number) => boolean; onFile: (file: File) => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Patch | null>(null);
+  // Mentor requests in flight; "Thinking…" shows while any is. Not a message, so never sent as history.
+  const [inflight, setInflight] = useState(0);
   const seenNote = useRef(0);
   // Live events, so the overlap check below sees the schedule as it is when the reply lands.
   const eventsRef = useRef(s.events);
   eventsRef.current = s.events;
+  const studentNow = useRef(s);
+  studentNow.current = s;
   const fileRef = useRef<HTMLInputElement>(null);
-  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm Grok. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.` }]), [s.id]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => setMsgs([{ me: false, text: `Hi ${s.name}! I'm your mentor. Tell me about schedule changes, or say if you're ahead or behind — I'll make small changes right away and ask before bigger ones.`, choices: asChips(defaultChips()) }]), [s.id]);
   useEffect(() => {
     if (!note || seenNote.current === note.id) return;
     seenNote.current = note.id;
-    setMsgs((current) => [...current, { me: false, text: note.text }]);
+    setMsgs((current) => [...current, { me: false, text: note.text, choices: fallbackChips(note.patch !== null ? "pending" : "start", studentNow.current) }]);
     setPending(note.patch);
   }, [note]);
-  const send = () => {
-    const raw = text.trim();
-    if (!raw) return;
-    setText("");
-    setMsgs((current) => [...current, { me: true, text: raw }]);
-    if (pending && /^(yes|yep|apply|do it|add them|add it)\b/i.test(raw)) {
-      onApply(pending);
+  // Scroll the list itself: scrollIntoView would also scroll the window to the panel on narrow screens.
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs]);
+  // Typed text and chip clicks both come through here, so a chip says exactly what its label says.
+  const send = (raw: string, fromChip = false, focusInput = false) => {
+    const { message, route } = routeMessage(raw, s, pending !== null, fromChip);
+    if (route.kind === "ignore") return;
+    // "Something else" always focuses the text box; another chip only after a keyboard activation,
+    // since focusing after a tap would pop up the on-screen keyboard on a phone.
+    // preventScroll: on a narrow screen focusing would otherwise scroll the window to the panel.
+    if (route.kind === "focus" || (fromChip && focusInput))
+      inputRef.current?.focus({ preventScroll: true });
+    if (route.kind === "focus") return;
+    if (!fromChip) setText("");
+    setMsgs((current) => [...current, { me: true, text: message }]);
+    if (route.kind === "apply" && pending) {
+      const undoId = onApplyNow(pending);
       setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change." }]);
+      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change.", undoId, choices: fallbackChips("applied", s) }]);
       return;
     }
-    if (pending && /^(no|nope|leave it)\b/i.test(raw)) {
+    if (route.kind === "decline") {
       setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Left the week as it is." }]);
+      setMsgs((current) => [...current, { me: false, text: "Left the week as it is.", choices: fallbackChips("start", s) }]);
+      return;
+    }
+    if (route.kind === "local") {
+      // Ahead, behind and postpone are the student's own one-step changes: applied now, with Undo.
+      const undoId = route.patch ? onApplyNow(route.patch) : undefined;
+      setPending(null);
+      setMsgs((current) => [
+        ...current,
+        ...(route.note ? [{ me: false, text: route.note, undoId }] : []),
+        { me: false, text: route.reply, choices: route.choices },
+      ]);
       return;
     }
     const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
-    void mentorChat({ data: { model: "Grok", message: raw, student: snapshot } }).then((turn) => {
+    const previous = [...msgs].reverse().find((m) => !m.me)?.text;
+    setInflight((n) => trackRequest(n, "start"));
+    void mentorChat({ data: { message, ...(previous ? { previous } : {}), student: snapshot } }).then((turn) => {
       if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);
         setPending(null);
-        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId }]);
+        setMsgs((current) => [...current, { me: false, text: turn.reply }, { me: false, text: `Added ${describeSmallPatch(turn.patch!)}.`, undoId, choices: modelTurnChips(turn, s, true) }]);
         return;
       }
       setPending(turn.patch);
-      setMsgs((current) => [...current, { me: false, text: turn.reply }]);
-    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed." }]));
+      setMsgs((current) => [...current, { me: false, text: turn.reply, choices: modelTurnChips(turn, s) }]);
+    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: fallbackChips("start", s) }]))
+      .finally(() => setInflight((n) => trackRequest(n, "end")));
   };
   const undo = (index: number, id: number) => {
     const ok = onUndo(id);
     setMsgs((current) => [
       ...current.map((m, i) => (i === index ? { ...m, undoId: undefined } : m)),
-      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone." },
+      { me: false, text: ok ? "Undone." : "That changed since I added it, so I left it alone.", choices: fallbackChips("undone", s) },
     ]);
   };
+  // Only the latest assistant turn offers chips; any later message (even a typed one) retires them.
+  const latest = msgs[msgs.length - 1];
+  const thinking = inflight > 0;
+  const quick = latest && !latest.me ? withOther(latest.choices ?? []) : [];
   return (
     <aside className="flex h-[calc(100vh-110px)] flex-col rounded-xl border bg-card lg:sticky lg:top-5">
       <div className="flex items-center gap-2 border-b p-3">
         <b className="text-sm">Mentor</b>
-        <span className="ml-auto rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground">Grok</span>
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-3 text-sm">
-        {msgs.map((m, i) => (
-          <div key={i} className={m.me ? "ml-8 rounded-lg bg-primary p-2.5 text-primary-foreground" : "mr-4"}>
-            {m.text}
-            {m.undoId !== undefined && (
-              <button type="button" onClick={() => undo(i, m.undoId!)} className="ml-2 rounded-md border px-2 py-0.5 text-xs hover:bg-muted">Undo</button>
-            )}
+      <div
+        ref={listRef}
+        className="flex-1 space-y-3 overflow-y-auto p-3 text-sm"
+      >
+        <div role="log" aria-live="polite" className="space-y-3">
+          {msgs.map((m, i) => (
+            <div key={i} className={m.me ? "ml-8 rounded-lg bg-primary p-2.5 text-primary-foreground" : "mr-4"}>
+              {m.text}
+              {m.undoId !== undefined && (
+                <button type="button" onClick={() => undo(i, m.undoId!)} className="ml-2 rounded-md border px-2 py-0.5 text-xs hover:bg-muted">Undo</button>
+              )}
+            </div>
+          ))}
+          {thinking && <div className="mr-4 text-xs text-muted-foreground">Thinking…</div>}
+        </div>
+        {quick.length > 0 && (
+          <div role="group" aria-label="Quick replies" className="flex flex-wrap gap-1.5">
+            {quick.map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                title={chip.text}
+                aria-label={chip.text}
+                onClick={(e) => send(chip.text, true, focusAfterChipClick(e.detail))}
+                className="max-w-full rounded-full border bg-background px-2.5 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {chip.label}
+              </button>
+            ))}
           </div>
-        ))}
+        )}
       </div>
       <div className="flex gap-2 border-t p-3">
         <input ref={fileRef} hidden type="file" accept=".pdf,.txt,.md,application/pdf,text/plain" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
         <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md border px-2 text-muted-foreground hover:bg-muted" aria-label="Upload a file"><Paperclip className="h-4 w-4" /></button>
-        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
+        <input ref={inputRef} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send(text)}
           placeholder="I have a midterm Thursday…" className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-        <button onClick={send} className="rounded-md bg-accent px-3 text-accent-foreground"><Send className="h-4 w-4" /></button>
+        <button onClick={() => send(text)} aria-label="Send" className="rounded-md bg-accent px-3 text-accent-foreground"><Send className="h-4 w-4" /></button>
       </div>
     </aside>
   );
