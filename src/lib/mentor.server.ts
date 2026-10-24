@@ -3,8 +3,9 @@ import { resolve } from "node:path";
 import { calendarPrompt, eventsFromModel, parseIsoDate, type CalendarRequest } from "./calendar-gemini";
 import type { CalEvent } from "./launchpad";
 import { sanitizePatch, type Patch } from "./patch";
+import { classifyPatch, type PatchSize } from "./patchSize";
 
-export type Turn = { reply: string; patch: Patch | null };
+export type Turn = { reply: string; patch: Patch | null; size?: PatchSize };
 export type Opportunity = { name: string; sub?: string; what: string; url: string };
 export type OpportunityLists = { research: Opportunity[]; projects: Opportunity[] };
 
@@ -48,12 +49,14 @@ export async function chatWithMentor(body: ChatBody): Promise<Turn> {
     "If they say they are behind, set status to behind. If they are ahead, set status to ahead. Do not invent an hour tracker.",
     "Long-term monthly or yearly reminders go in longTermAdd only.",
     "Return JSON only: {\"reply\": string, \"patch\": object|null}. patch may include status, statusNote, addEvents, addTasks, courses, longTermAdd, weeklyTargets.",
-    "The reply must describe the change and ask them to say yes before it is applied. If nothing should change, patch is null.",
+    "A small, specific change (exactly one task, one yearly goal or reminder, one weekly hour target, or one single calendar event that does not overlap any existing event) is applied immediately: the reply just says what you added and must not ask for confirmation.",
+    "Anything bigger (several items, more than one event, an event that overlaps an existing one, moving or removing events, status changes, courses) is not applied until they say yes, so the reply describes it and asks them to say yes. If nothing should change, patch is null.",
     `Student: ${JSON.stringify(body.student)}`,
     `They said: ${body.message}`,
   ].join("\n");
-  if (body.model === "Grok") return grok(prompt);
-  return geminiTurn(prompt);
+  const events = existingEventsOf(body.student);
+  if (body.model === "Grok") return grok(prompt, events);
+  return geminiTurnParts([{ text: prompt }], true, events);
 }
 
 export async function readMaterial(body: MaterialBody): Promise<Turn> {
@@ -67,7 +70,7 @@ export async function readMaterial(body: MaterialBody): Promise<Turn> {
   const parts: Record<string, unknown>[] = [];
   if (body.base64) parts.push({ inlineData: { mimeType: body.mime || "application/pdf", data: body.base64 } });
   parts.push({ text: body.text ? `${instruction}\n\n${body.text.slice(0, 20000)}` : instruction });
-  return geminiTurnParts(parts);
+  return geminiTurnParts(parts, false);
 }
 
 /**
@@ -102,11 +105,7 @@ export async function loadOpportunities(): Promise<OpportunityLists | null> {
   return lists;
 }
 
-async function geminiTurn(prompt: string): Promise<Turn> {
-  return geminiTurnParts([{ text: prompt }]);
-}
-
-async function geminiTurnParts(parts: Record<string, unknown>[]): Promise<Turn> {
+async function geminiTurnParts(parts: Record<string, unknown>[], allowSmall: boolean, events?: unknown[]): Promise<Turn> {
   const result = await geminiText(parts, false);
   if (!result.text) {
     const reply = result.limited
@@ -116,8 +115,7 @@ async function geminiTurnParts(parts: Record<string, unknown>[]): Promise<Turn> 
   }
   const parsed = jsonFrom(result.text) as { reply?: unknown; patch?: unknown } | null;
   const reply = typeof parsed?.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : result.text.trim();
-  const patch = sanitizePatch(parsed?.patch);
-  return { reply: withAsk(reply, patch), patch };
+  return turnOf(reply, parsed?.patch, allowSmall, events);
 }
 
 async function geminiText(parts: Record<string, unknown>[], search: boolean): Promise<{ text: string; limited: boolean }> {
@@ -160,7 +158,7 @@ async function geminiText(parts: Record<string, unknown>[], search: boolean): Pr
   return { text: "", limited };
 }
 
-async function grok(prompt: string): Promise<Turn> {
+async function grok(prompt: string, events?: unknown[]): Promise<Turn> {
   const key = envValue("XAI_API_KEY");
   if (!key) return { reply: "Grok is in practice mode until an xAI key is set. Nothing was changed.", patch: null };
   const response = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -184,9 +182,24 @@ async function grok(prompt: string): Promise<Turn> {
   const payload = await response.json() as { choices?: { message?: { content?: string } }[] };
   const text = payload.choices?.[0]?.message?.content ?? "";
   const parsed = jsonFrom(text) as { reply?: unknown; patch?: unknown } | null;
-  const patch = sanitizePatch(parsed?.patch);
   const reply = typeof parsed?.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : "Grok could not finish that. Nothing was changed.";
-  return { reply: withAsk(reply, patch), patch };
+  return turnOf(reply, parsed?.patch, true, events);
+}
+
+/**
+ * The client sends its current events with the chat request. The server uses them
+ * for the "does the new event overlap?" check; missing events mean no event can be
+ * small. The client re-checks against its live events before applying.
+ */
+function existingEventsOf(student: object): unknown[] | undefined {
+  const events = (student as { events?: unknown }).events;
+  return Array.isArray(events) ? events : undefined;
+}
+
+function turnOf(reply: string, rawPatch: unknown, allowSmall: boolean, events?: unknown[]): Turn {
+  const patch = sanitizePatch(rawPatch);
+  const size = patch && allowSmall ? classifyPatch(rawPatch, events) : "big";
+  return { reply: size === "small" ? reply : withAsk(reply, patch), patch, size };
 }
 
 function withAsk(reply: string, patch: Patch | null): string {
