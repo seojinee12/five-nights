@@ -530,7 +530,8 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
     // "Something else" always focuses the text box; another chip only after a keyboard activation,
     // since focusing after a tap would pop up the on-screen keyboard on a phone.
     // preventScroll: on a narrow screen focusing would otherwise scroll the window to the panel.
-    if (route.kind === "focus" || (fromChip && focusInput)) inputRef.current?.focus({ preventScroll: true });
+    if (route.kind === "focus" || (fromChip && focusInput))
+      inputRef.current?.focus({ preventScroll: true });
     if (route.kind === "focus") return;
     if (!fromChip) setText("");
     setMsgs((current) => [...current, { me: true, text: message }]);
@@ -568,7 +569,8 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
       }
       setPending(turn.patch);
       setMsgs((current) => [...current, { me: false, text: turn.reply, choices: modelTurnChips(turn, s) }]);
-    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: fallbackChips("start", s) }])).finally(() => setInflight((n) => trackRequest(n, "end")));
+    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: fallbackChips("start", s) }]))
+      .finally(() => setInflight((n) => trackRequest(n, "end")));
   };
   const undo = (index: number, id: number) => {
     const ok = onUndo(id);
