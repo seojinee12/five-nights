@@ -141,7 +141,7 @@ function AppPage() {
           {tab === "Opportunities" && <Opportunities s={student} />}
           {tab === "Long-term" && <LongTerm s={student} onChange={edit} />}
         </main>
-        <Assistant s={student} note={note} onApply={(patch) => setStudent((current) => current ? applyPatch(current, patch) : current)} onApplyNow={applyNow} onUndo={undoApplied} onFile={(file) => void onSyllabusFile(file)} />
+        <Assistant s={student} note={note} onApplyNow={applyNow} onUndo={undoApplied} onFile={(file) => void onSyllabusFile(file)} />
       </div>
     </div>
   );
@@ -496,7 +496,7 @@ function GoalColumn({ title, items, onEdit, onAdd }: { title: string; items: Rem
 
 type Msg = { me: boolean; text: string; undoId?: number | undefined; choices?: Chip[] };
 
-function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Student; note: { id: number; text: string; patch: Patch | null } | null; onApply: (patch: Patch) => void; onApplyNow: (patch: Patch) => number; onUndo: (id: number) => boolean; onFile: (file: File) => void }) {
+function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: { id: number; text: string; patch: Patch | null } | null; onApplyNow: (patch: Patch) => number; onUndo: (id: number) => boolean; onFile: (file: File) => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Patch | null>(null);
@@ -529,9 +529,9 @@ function Assistant({ s, note, onApply, onApplyNow, onUndo, onFile }: { s: Studen
     if (!fromChip) setText("");
     setMsgs((current) => [...current, { me: true, text: message }]);
     if (route.kind === "apply" && pending) {
-      onApply(pending);
+      const undoId = onApplyNow(pending);
       setPending(null);
-      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change.", choices: asChips(defaultChips()) }]);
+      setMsgs((current) => [...current, { me: false, text: "Applied. The week now includes that change.", undoId, choices: asChips(defaultChips()) }]);
       return;
     }
     if (route.kind === "decline") {

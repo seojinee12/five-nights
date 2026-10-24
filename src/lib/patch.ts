@@ -1,3 +1,4 @@
+import { fitEvents } from "./eventFit";
 import type { CalEvent, Category, Status, Student, Task } from "./launchpad";
 
 export type Patch = {
@@ -51,10 +52,13 @@ export function applyPatch(student: Student, patch: Patch): Student {
   };
   if (patch.status) next.status = patch.status;
   if (patch.statusNote) next.statusNote = patch.statusNote;
+  // Exact repeats are skipped; the rest are fitted into free time (shifted or, if no gap is long enough, left out).
+  const same = (a: CalEvent, b: CalEvent) => a.day === b.day && a.start === b.start && a.end === b.end && a.title === b.title;
+  const fresh: CalEvent[] = [];
   for (const event of patch.addEvents ?? []) {
-    const exists = next.events.some((item) => item.day === event.day && item.start === event.start && item.end === event.end && item.title === event.title);
-    if (!exists) next.events.push(event);
+    if (![...next.events, ...fresh].some((item) => same(item, event))) fresh.push(event);
   }
+  next.events.push(...fitEvents(next.events, fresh).events);
   for (const task of patch.addTasks ?? []) {
     if (!next.tasks.some((item) => item.title === task.title)) next.tasks.push(task);
   }

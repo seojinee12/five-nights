@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { calendarPrompt, eventsFromModel, parseIsoDate, type CalendarRequest } from "./calendar-gemini";
-import type { CalEvent } from "./launchpad";
+import { fitEvents } from "./eventFit";
+import { fmt, type CalEvent } from "./launchpad";
 import { defaultChips, replyChips } from "./mentorChips";
 import { sanitizePatch, type Patch } from "./patch";
 import { classifyPatch, type PatchSize } from "./patchSize";
+import { DAY_END, DAY_START } from "./schedule";
 
 /** `choices` are the chip labels (at most 40 characters); `choiceTexts` is the full text per label, set only when a label was cut. */
 export type Turn = { reply: string; patch: Patch | null; size?: PatchSize; choices?: string[]; choiceTexts?: string[] };
@@ -45,7 +47,9 @@ export async function chatWithMentor(body: ChatBody): Promise<Turn> {
   const prompt = [
     "You are the LaunchPad mentor. The student maximizes productivity. Academia and career come before projects and personal life unless they set an explicit priority.",
     "Free time can hold work. The ten minutes between classes is pseudo-free transition time and must stay empty. A short gap that is not a transition is still free.",
-    "Timed work becomes addEvents (day 0=Mon, start/end as hours, kind class|task|life). Untimed work such as the gym becomes addTasks with timed false.",
+    "Timed work becomes addEvents. Each event is {day, start, end, title, kind}: day is an integer 0-6 (0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun, so weekdays are 0-4), start and end are numbers of hours on a 24-hour clock (13.5 means 1:30pm) with end after start, title is short, kind is class|task|life (study blocks are task).",
+    `Events must sit inside the day window ${DAY_START} to ${DAY_END}, must not overlap anything in Student.events or each other, and need the ten-minute transition after a class left empty: choose free gaps. Several requested blocks (such as one per weekday plus a weekend one) all go in one addEvents list, one event each, with exact lengths.`,
+    "Untimed work such as the gym becomes addTasks with timed false.",
     "Weekly hour totals such as 'study 20 hours outside class' belong in weeklyTargets, not on the clock.",
     "If they say they are behind, set status to behind. If they are ahead, set status to ahead. Do not invent an hour tracker.",
     "Long-term monthly or yearly reminders go in longTermAdd only.",
@@ -175,20 +179,51 @@ function existingEventsOf(student: object): unknown[] | undefined {
 }
 
 function turnOf(
-  reply: string,
+  replyText: string,
   rawPatch: unknown,
   allowSmall: boolean,
   events?: unknown[],
   rawChoices?: unknown,
 ): Turn {
-  const patch = sanitizePatch(rawPatch);
-  const size = patch && allowSmall ? classifyPatch(rawPatch, events) : "big";
+  const sanitized = sanitizePatch(rawPatch);
+  const size = sanitized && allowSmall ? classifyPatch(rawPatch, events) : "big";
+  const fitted = fitProposal(sanitized, events);
+  const patch = fitted.patch;
+  const reply = fitted.note ? `${replyText}\n\n${fitted.note}` : replyText;
   // The model's quick replies when it gave usable ones; yes/no while a change waits; otherwise none.
   const chips = replyChips(rawChoices, patch !== null && size !== "small" ? defaultChips(true) : []);
   const choices = chips.map((chip) => chip.label);
   const turn: Turn = { reply: size === "small" ? reply : withAsk(reply, patch), patch, size, choices };
   if (chips.some((chip) => chip.text !== chip.label)) turn.choiceTexts = chips.map((chip) => chip.text);
   return turn;
+}
+
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const slot = (event: CalEvent) => `${DAY_NAMES[event.day] ?? ""} ${fmt(event.start)}-${fmt(event.end)}`;
+
+/**
+ * New events must not overlap the week or each other. The model's overlapping ones are moved to the
+ * nearest free gap on the same day, or left out when no gap is long enough, and the reply says so.
+ * Without the client's events nothing can be checked, so the patch is returned as it is.
+ */
+function fitProposal(patch: Patch | null, events?: unknown[]): { patch: Patch | null; note: string } {
+  if (!patch?.addEvents || !events) return { patch, note: "" };
+  const existing = events.filter(isEvent);
+  const { events: fitted, moved, dropped } = fitEvents(existing, patch.addEvents);
+  if (!moved.length && !dropped.length) return { patch, note: "" };
+  const next: Patch = { ...patch };
+  if (fitted.length) next.addEvents = fitted;
+  else delete next.addEvents;
+  const lines = [
+    ...moved.map(({ from, to }) => `I moved "${to.title}" from ${slot(from)} to ${slot(to)} to avoid a clash.`),
+    ...dropped.map((event) => `I left out "${event.title}" (${slot(event)}) because there is no free gap that long that day.`),
+  ];
+  return { patch: Object.keys(next).length ? next : null, note: lines.join(" ") };
+}
+
+function isEvent(value: unknown): value is CalEvent {
+  const row = value as Partial<CalEvent> | null;
+  return !!row && typeof row.day === "number" && typeof row.start === "number" && typeof row.end === "number" && row.end > row.start;
 }
 
 function withAsk(reply: string, patch: Patch | null): string {
