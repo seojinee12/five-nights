@@ -235,6 +235,17 @@ const seojinTasks: Task[] = [
   { id: "t11", title: "Go to the gym 3×", category: "fun", timed: false },
 ];
 
+/** Lunch from 2 to 3 PM every day except Sunday. Meals are "life" events, like the rest of the non-class, non-task blocks. */
+function seojinLunch(): CalEvent[] {
+  return [0, 1, 2, 3, 4, 5].map((day) => ({
+    day,
+    start: 14,
+    end: 15,
+    title: "Lunch",
+    kind: "life" as const,
+  }));
+}
+
 const seojinLife: CalEvent[] = [
   { day: 2, start: 16, end: 17, title: "Résumé review", kind: "task" },
   { day: 1, start: 18, end: 19.5, title: "Dance class", kind: "life" },
@@ -252,7 +263,7 @@ export const STUDENTS: Student[] = [
     statusNote: "Maximizing productivity. Academia and career come first.",
     focus: ["academic", "career", "project", "fun"],
     courses: seojinCourses,
-    events: [...seojinClasses(), ...seojinLife],
+    events: [...seojinClasses(), ...seojinLunch(), ...seojinLife],
     tasks: seojinTasks,
     weeklyTargets: [
       { label: "Study outside class", hours: 20, done: 9 },
