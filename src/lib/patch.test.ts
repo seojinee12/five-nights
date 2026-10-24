@@ -26,3 +26,15 @@ describe("applyPatch", () => {
     expect(SEOJIN.events).not.toBe(next.events);
   });
 });
+
+describe("applyPatch postpone", () => {
+  it("moves only the named tasks to next week without changing the original", () => {
+    const before = structuredClone(SEOJIN);
+    const id = SEOJIN.tasks[0]?.id ?? "";
+    const next = applyPatch(SEOJIN, { postpone: [id, "missing"] });
+    expect(next.tasks.find((task) => task.id === id)?.due).toBe("Next week");
+    expect(next.tasks.filter((task) => task.due === "Next week")).toHaveLength(1);
+    expect(next.tasks).toHaveLength(SEOJIN.tasks.length);
+    expect(SEOJIN).toEqual(before);
+  });
+});

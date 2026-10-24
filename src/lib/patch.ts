@@ -8,7 +8,12 @@ export type Patch = {
   courses?: Student["courses"];
   longTermAdd?: string[];
   weeklyTargets?: Student["weeklyTargets"];
+  /** Task ids moved to next week. Built only by the postpone chips; sanitizePatch never returns it. */
+  postpone?: string[];
 };
+
+/** The due text a postponed task gets. */
+export const POSTPONED_DUE = "Next week";
 
 const STATUSES: Status[] = ["on-track", "behind", "ahead"];
 const CATEGORIES: Category[] = ["academic", "career", "project", "fun"];
@@ -52,6 +57,12 @@ export function applyPatch(student: Student, patch: Patch): Student {
   }
   for (const task of patch.addTasks ?? []) {
     if (!next.tasks.some((item) => item.title === task.title)) next.tasks.push(task);
+  }
+  if (patch.postpone?.length) {
+    const ids = new Set(patch.postpone);
+    next.tasks = next.tasks.map((task) =>
+      ids.has(task.id) ? { ...task, due: POSTPONED_DUE } : task,
+    );
   }
   if (patch.courses) next.courses = mergeCourses(next.courses, patch.courses);
   for (const goal of patch.longTermAdd ?? []) {
