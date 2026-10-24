@@ -1,4 +1,5 @@
-import { Info } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Info, Search } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
@@ -8,7 +9,17 @@ const FOCUS_CLASS =
   "rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /** The "Best fits for you" heading, an info icon with the short scoring tip, and the fuller description. */
-export function OpportunitiesHeading() {
+export function OpportunitiesHeading({
+  onFindMore,
+  finding = false,
+  message,
+}: {
+  /** When set, a small "Find more" button shows in the heading row. */
+  onFindMore?: () => void;
+  finding?: boolean;
+  /** A short result line shown under the heading row. */
+  message?: string | null;
+}) {
   return (
     <TooltipProvider delayDuration={150}>
       <Collapsible>
@@ -28,11 +39,29 @@ export function OpportunitiesHeading() {
               <TooltipContent className={TIP_CLASS}>{SCORING_EXPLAINER.short}</TooltipContent>
             </Tooltip>
           </div>
-          <CollapsibleTrigger
-            className={`text-xs text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
-          >
-            How is this scored?
-          </CollapsibleTrigger>
+          <div className="flex items-center gap-3">
+            {onFindMore && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!finding) onFindMore();
+                }}
+                aria-disabled={finding}
+                className={`inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground aria-disabled:cursor-default aria-disabled:opacity-60 aria-disabled:hover:text-muted-foreground ${FOCUS_CLASS}`}
+              >
+                <Search className="size-3" aria-hidden="true" />
+                {finding ? "Finding…" : "Find more"}
+              </button>
+            )}
+            <CollapsibleTrigger
+              className={`text-xs text-muted-foreground hover:text-foreground ${FOCUS_CLASS}`}
+            >
+              How is this scored?
+            </CollapsibleTrigger>
+          </div>
+        </div>
+        <div role="status" aria-live="polite">
+          {message && <p className="mt-1 text-xs text-muted-foreground">{message}</p>}
         </div>
         <CollapsibleContent
           data-testid="scoring-explainer"
@@ -85,11 +114,18 @@ function OpportunityCard({ item }: { item: RankedOpportunity }) {
 export function OpportunityList({
   items,
   visible = 3,
+  expandSignal = 0,
 }: {
   items: RankedOpportunity[];
   visible?: number;
+  /** Opens the "See N more" expander each time this number changes to a new value above 0. */
+  expandSignal?: number;
 }) {
   const rest = items.slice(visible);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (expandSignal > 0) setOpen(true);
+  }, [expandSignal]);
   return (
     <div className="space-y-3">
       <ul className="space-y-3">
@@ -98,7 +134,11 @@ export function OpportunityList({
         ))}
       </ul>
       {rest.length > 0 && (
-        <details className="group">
+        <details
+          className="group"
+          open={open}
+          onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+        >
           <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
             See {rest.length} more
           </summary>

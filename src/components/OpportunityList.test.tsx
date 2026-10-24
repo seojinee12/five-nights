@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { OpportunitiesHeading, OpportunityList } from "./OpportunityList";
+import { FIND_MORE_MESSAGES } from "@/lib/findMore";
 import { SCORING_EXPLAINER, type RankedOpportunity } from "@/lib/opportunities";
 
 const item = (n: number): RankedOpportunity => ({
@@ -70,5 +71,66 @@ describe("OpportunitiesHeading", () => {
     for (const f of SCORING_EXPLAINER.factors) expect(text).toContain(`up to ${f.points}`);
     expect(text).toContain(SCORING_EXPLAINER.reductions.text);
     expect(text).not.toMatch(/gemini|openai|resume|\bAI\b/i);
+  });
+});
+
+describe("OpportunitiesHeading find more", () => {
+  it("shows no Find more button unless a handler is given", () => {
+    render(<OpportunitiesHeading />);
+    expect(screen.queryByRole("button", { name: /find more/i })).toBeNull();
+  });
+
+  it("calls the handler from a small Find more button", () => {
+    const onFindMore = vi.fn();
+    render(<OpportunitiesHeading onFindMore={onFindMore} />);
+    fireEvent.click(screen.getByRole("button", { name: "Find more" }));
+    expect(onFindMore).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it("is aria-disabled, still focusable, and reads Finding… while loading", () => {
+    const onFindMore = vi.fn();
+    render(<OpportunitiesHeading onFindMore={onFindMore} finding />);
+    const button = screen.getByRole("button", { name: "Finding…" });
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).not.toBeDisabled();
+    button.focus();
+    expect(button).toHaveFocus();
+    fireEvent.click(button);
+    expect(onFindMore).not.toHaveBeenCalled();
+  });
+
+  it("shows the empty and error messages inline", () => {
+    const { rerender } = render(
+      <OpportunitiesHeading onFindMore={() => {}} message={FIND_MORE_MESSAGES.empty} />,
+    );
+    const live = screen.getByRole("status");
+    expect(live).toHaveAttribute("aria-live", "polite");
+    expect(live).toHaveTextContent("No new opportunities found this time.");
+    rerender(<OpportunitiesHeading onFindMore={() => {}} message={FIND_MORE_MESSAGES.error} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't find more right now.");
+  });
+});
+
+describe("OpportunityList expandSignal", () => {
+  const items = [1, 2, 3, 4, 5].map(item);
+  const detailsOpen = () => document.querySelector("details")!.hasAttribute("open");
+
+  it("keeps the expander closed by default and opens it when the signal changes", () => {
+    const { rerender } = render(<OpportunityList items={items} expandSignal={0} />);
+    expect(detailsOpen()).toBe(false);
+    rerender(<OpportunityList items={items} expandSignal={1} />);
+    expect(detailsOpen()).toBe(true);
+  });
+
+  it("can be closed by hand and reopens on the next signal", () => {
+    const { rerender } = render(<OpportunityList items={items} expandSignal={1} />);
+    const details = document.querySelector("details")!;
+    expect(details).toHaveAttribute("open");
+    details.removeAttribute("open");
+    fireEvent(details, new Event("toggle"));
+    expect(detailsOpen()).toBe(false);
+    rerender(<OpportunityList items={items} expandSignal={2} />);
+    expect(detailsOpen()).toBe(true);
   });
 });
