@@ -1,6 +1,9 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Rocket, GraduationCap } from "lucide-react";
+import { useRef, useState } from "react";
+import { Rocket, GraduationCap, Plus } from "lucide-react";
+import {
+  CUSTOM_FOCUS_MAX_COUNT, CUSTOM_FOCUS_MAX_LENGTH, FOCUS_OPTIONS as FOCUS, validateCustomFocus,
+} from "@/lib/focus";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -16,21 +19,43 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
-const FOCUS = [
-  { id: "academic", label: "Academics" },
-  { id: "career", label: "Career & research" },
-  { id: "project", label: "Projects" },
-  { id: "fun", label: "Personal life" },
-];
+const chip = (on: boolean) =>
+  `rounded-full border px-3 py-1 text-sm transition outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"}`;
 
 function Landing() {
   const nav = useNavigate();
   const [name, setName] = useState("");
   const [major, setMajor] = useState("Electrical Engineering");
   const [focus, setFocus] = useState<string[]>(["academic", "career"]);
+  // The student's own focus areas: every chip they added, and which are selected.
+  const [own, setOwn] = useState<{ label: string; on: boolean }[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const plusRef = useRef<HTMLButtonElement>(null);
+
+  const closeAdd = () => {
+    setAdding(false);
+    setDraft("");
+    requestAnimationFrame(() => plusRef.current?.focus());
+  };
+  const addOwn = () => {
+    const result = validateCustomFocus(draft, own.map((o) => o.label));
+    if (!result.ok && result.reason === "empty") return;
+    if (result.ok) setOwn([...own, { label: result.label, on: true }]);
+    else {
+      // Already there: select that chip instead of adding a second one.
+      const builtIn = FOCUS.find((f) => f.label === result.existing);
+      if (builtIn) setFocus((cur) => (cur.includes(builtIn.id) ? cur : [...cur, builtIn.id]));
+      else setOwn(own.map((o) => (o.label === result.existing ? { ...o, on: true } : o)));
+    }
+    closeAdd();
+  };
 
   const start = () => {
-    localStorage.setItem("lp-profile", JSON.stringify({ name: name || "Engineer", major, focus }));
+    localStorage.setItem("lp-profile", JSON.stringify({
+      name: name || "Engineer", major, focus,
+      customFocus: own.filter((o) => o.on).map((o) => o.label),
+    }));
     nav({ to: "/app", search: { u: "me" } });
   };
 
@@ -72,12 +97,36 @@ function Landing() {
               {FOCUS.map((f) => {
                 const on = focus.includes(f.id);
                 return (
-                  <button key={f.id} onClick={() => setFocus(on ? focus.filter((x) => x !== f.id) : [...focus, f.id])}
-                    className={`rounded-full border px-3 py-1 text-sm transition ${on ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"}`}>
+                  <button key={f.id} aria-pressed={on} onClick={() => setFocus(on ? focus.filter((x) => x !== f.id) : [...focus, f.id])}
+                    className={chip(on)}>
                     {f.label}
                   </button>
                 );
               })}
+              {own.map((o) => (
+                <button key={o.label} aria-pressed={o.on}
+                  onClick={() => setOwn(own.map((x) => (x.label === o.label ? { ...x, on: !x.on } : x)))}
+                  className={`${chip(o.on)} max-w-full break-words`}>
+                  {o.label}
+                </button>
+              ))}
+              {adding ? (
+                <input autoFocus value={draft} maxLength={CUSTOM_FOCUS_MAX_LENGTH} aria-label="Your own focus" placeholder="Your own"
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return;
+                    if (e.key === "Enter") { e.preventDefault(); addOwn(); }
+                    else if (e.key === "Escape") { e.preventDefault(); closeAdd(); }
+                  }}
+                  onBlur={() => { if (!draft.trim()) setAdding(false); }}
+                  className="w-40 rounded-full border bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              ) : own.length < CUSTOM_FOCUS_MAX_COUNT && (
+                <button ref={plusRef} type="button" aria-label="Add your own focus" title="Add your own focus"
+                  onClick={() => setAdding(true)}
+                  className="inline-flex items-center rounded-full border bg-background px-2.5 py-1 text-sm text-foreground outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
             </div>
           </div>
           <button onClick={start} className="w-full rounded-md bg-accent py-2.5 font-semibold text-accent-foreground hover:opacity-90">
