@@ -20,6 +20,7 @@ import {
   routeMessage,
   sanitizeChips,
   sanitizeChoices,
+  trackRequest,
   turnChips,
   withOther,
 } from "./mentorChips";
@@ -485,5 +486,19 @@ describe("focusAfterChipClick", () => {
     expect(focusAfterChipClick(0)).toBe(true);
     expect(focusAfterChipClick(1)).toBe(false);
     expect(focusAfterChipClick(2)).toBe(false);
+  });
+});
+
+describe("trackRequest", () => {
+  it("shows Thinking while any request is in flight and never goes below zero", () => {
+    let count = 0;
+    count = trackRequest(count, "start");
+    count = trackRequest(count, "start");
+    expect(count).toBe(2);
+    count = trackRequest(count, "end");
+    expect(count).toBeGreaterThan(0);
+    count = trackRequest(count, "end");
+    expect(count).toBe(0);
+    expect(trackRequest(0, "end")).toBe(0);
   });
 });

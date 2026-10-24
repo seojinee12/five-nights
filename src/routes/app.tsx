@@ -9,7 +9,7 @@ import {
 import { importCalendarFile } from "@/lib/calendar-import";
 import { applyPatch, type Patch } from "@/lib/patch";
 import { classifyPatch, describeSmallPatch } from "@/lib/patchSize";
-import { asChips, defaultChips, fallbackChips, focusAfterChipClick, modelTurnChips, routeMessage, withOther, type Chip } from "@/lib/mentorChips";
+import { asChips, defaultChips, fallbackChips, focusAfterChipClick, modelTurnChips, routeMessage, trackRequest, withOther, type Chip } from "@/lib/mentorChips";
 import { mentorChat, readMaterial, sourceOpportunities } from "@/lib/mentor.functions";
 import { rankSourced, profileFromStudent } from "@/lib/opportunities";
 import { OpportunityList } from "@/components/OpportunityList";
@@ -500,6 +500,8 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Patch | null>(null);
+  // Mentor requests in flight; "Thinking…" shows while any is. Not a message, so never sent as history.
+  const [inflight, setInflight] = useState(0);
   const seenNote = useRef(0);
   // Live events, so the overlap check below sees the schedule as it is when the reply lands.
   const eventsRef = useRef(s.events);
@@ -556,6 +558,7 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
     }
     const snapshot = { name: s.name, major: s.major, status: s.status, statusNote: s.statusNote, focus: s.focus, courses: s.courses, events: s.events, tasks: s.tasks, weeklyTargets: s.weeklyTargets, longTerm: s.longTerm };
     const previous = [...msgs].reverse().find((m) => !m.me)?.text;
+    setInflight((n) => trackRequest(n, "start"));
     void mentorChat({ data: { message, ...(previous ? { previous } : {}), student: snapshot } }).then((turn) => {
       if (turn.patch && turn.size === "small" && classifyPatch(turn.patch, eventsRef.current) === "small") {
         const undoId = onApplyNow(turn.patch);
@@ -565,7 +568,7 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
       }
       setPending(turn.patch);
       setMsgs((current) => [...current, { me: false, text: turn.reply, choices: modelTurnChips(turn, s) }]);
-    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: fallbackChips("start", s) }]));
+    }).catch(() => setMsgs((current) => [...current, { me: false, text: "I couldn't reach the mentor. Nothing was changed.", choices: fallbackChips("start", s) }])).finally(() => setInflight((n) => trackRequest(n, "end")));
   };
   const undo = (index: number, id: number) => {
     const ok = onUndo(id);
@@ -576,6 +579,7 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
   };
   // Only the latest assistant turn offers chips; any later message (even a typed one) retires them.
   const latest = msgs[msgs.length - 1];
+  const thinking = inflight > 0;
   const quick = latest && !latest.me ? withOther(latest.choices ?? []) : [];
   return (
     <aside className="flex h-[calc(100vh-110px)] flex-col rounded-xl border bg-card lg:sticky lg:top-5">
@@ -595,6 +599,7 @@ function Assistant({ s, note, onApplyNow, onUndo, onFile }: { s: Student; note: 
               )}
             </div>
           ))}
+          {thinking && <div className="mr-4 text-xs text-muted-foreground">Thinking…</div>}
         </div>
         {quick.length > 0 && (
           <div role="group" aria-label="Quick replies" className="flex flex-wrap gap-1.5">

@@ -322,3 +322,8 @@ export function resolveChip(label: string, student: Student, fromChip = false): 
 export function focusAfterChipClick(detail: number): boolean {
   return detail === 0;
 }
+
+/** Counts Mentor requests in flight, for the "Thinking…" line: it shows while the count is above 0. */
+export function trackRequest(count: number, event: "start" | "end"): number {
+  return event === "start" ? count + 1 : Math.max(0, count - 1);
+}
