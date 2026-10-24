@@ -39,11 +39,10 @@ describe("OpportunityList", () => {
     }
   });
 
-  it("gives each score a focusable tooltip trigger", () => {
+  it("shows scores as plain text, with no tooltip button on each card", () => {
     render(<OpportunityList items={[1, 2].map(item)} />);
-    const score = screen.getByRole("button", { name: "99/100" });
-    score.focus();
-    expect(score).toHaveFocus();
+    expect(screen.getByText("99/100")).toBeInTheDocument();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });
 
@@ -56,9 +55,11 @@ describe("OpportunitiesHeading", () => {
     expect(icon).toHaveFocus();
     const details = document.querySelector("details")!;
     expect(details).not.toHaveAttribute("open");
-    expect(within(details).getByText("How is this scored?")).toBeInTheDocument();
+    expect(within(details).getByText("How is this scored?").tagName).toBe("SUMMARY");
+    expect(screen.getAllByRole("button")).toHaveLength(1);
     const text = screen.getByTestId("scoring-explainer").textContent ?? "";
     for (const f of SCORING_EXPLAINER.factors) expect(text).toContain(`up to ${f.points}`);
-    expect(text).not.toMatch(/gemini|resume/i);
+    expect(text).toContain(SCORING_EXPLAINER.reductions.text);
+    expect(text).not.toMatch(/gemini|openai|resume|\bAI\b/i);
   });
 });

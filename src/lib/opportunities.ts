@@ -83,8 +83,9 @@ const LEVEL_POINTS = 10;
  * point constants above so the numbers shown to students can't drift from the ranking.
  */
 export const SCORING_EXPLAINER = {
-  short: `Score out of 100: topic match ${TOPIC_POINTS} · year ${YEAR_POINTS} · kind you want ${GOAL_TYPE_POINTS} · major ${MAJOR_POINTS} · beginner fit ${LEVEL_POINTS}. Lowered if your major or year doesn't fit or applications are closed.`,
-  intro: "Each opportunity gets a score from 0 to 100, highest first. It adds up:",
+  short:
+    "Out of 100, based on how well it fits your interests and goals (the biggest part), your year, the kind of opportunity you want, your major, and beginner fit.",
+  intro: "Each opportunity gets a score from 0 to 100, highest first. The points add up:",
   factors: [
     {
       label: "Topic match",
@@ -104,9 +105,10 @@ export const SCORING_EXPLAINER = {
       text: "early-year students score higher on beginner-friendly ones.",
     },
   ],
-  reductions:
-    "The score is reduced for a major mismatch, a year outside its range, or closed applications.",
-  local: "It runs on your device and doesn't need an AI call.",
+  reductions: {
+    label: "Lowered by",
+    text: "a major mismatch, a year outside its range, or closed applications.",
+  },
 } as const;
 
 type Source = "interests" | "goals" | "skills" | "major" | "context";
